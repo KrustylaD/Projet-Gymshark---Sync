@@ -556,8 +556,8 @@ body::before {
     position: sticky;
     bottom: 14px;
     padding-top: 10px;
-    background: linear-gradient(180deg, rgba(23, 24, 28, 0), rgba(23, 24, 28, 0.88) 24%, rgba(23, 24, 28, 0.96) 100%);
-    backdrop-filter: blur(12px);
+    background: transparent;
+    backdrop-filter: none;
     animation: apparition-vue var(--dur-med) var(--ease-smooth);
 }
 
@@ -624,7 +624,7 @@ body::before {
 .boite-saisie {
     width: 100%;
     min-height: 60px;
-    border-radius: 20px;
+    border-radius: 28px;
     border: 1px solid var(--border);
     background:
         linear-gradient(180deg, rgba(42, 43, 52, 0.9), rgba(33, 34, 42, 0.94)),
@@ -913,7 +913,7 @@ body::before {
 .message {
     max-width: 780px;
     padding: 14px 16px;
-    border-radius: 18px;
+    border-radius: 24px;
     border: 1px solid var(--border);
     background: var(--bg-chat-assistant);
     backdrop-filter: blur(10px);
