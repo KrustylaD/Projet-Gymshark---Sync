@@ -87,6 +87,12 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         model,
         prompt: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt,
         stream: true,
+        // Paramètres d'optimisation pour la vitesse
+        num_predict: 400,          // Limiter la longueur max des réponses (plus rapide)
+        temperature: 0.6,          // Réponses plus déterministes et rapides
+        top_k: 40,                 // Moins de choix = plus rapide
+        top_p: 0.85,               // Limiter la diversité
+        repeat_penalty: 1.1,       // Éviter les répétitions → réponses plus courtes
     };
 
     if (!fetchFn) {

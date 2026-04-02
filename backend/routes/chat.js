@@ -54,6 +54,7 @@ function trimHistory(history) {
 // Route principale de chat: reçoit `{ message, conversationId }` et stream la réponse SSE
 router.post('/api/chat', async (req, res) => {
     const { message, conversationId } = req.body || {};
+    console.log('[CHAT] Message reçu:', message.slice(0, 50));
     if (!message) return res.status(400).json({ error: 'Missing message' });
 
     const convId = typeof conversationId === 'string' && conversationId.trim()
@@ -75,25 +76,30 @@ router.post('/api/chat', async (req, res) => {
 
     // Envoyer l'ID de conversation au client
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
+    console.log('[CHAT] En attente de réponse Ollama...');
 
     let finished = false;
     let assistantReply = '';
+    let chunkCount = 0;
 
     try {
         await generateOllamaResponse(prompt, {
             timeoutMs,
             onChunk: (chunk) => {
                 try {
+                    chunkCount++;
                     const normalized = normalizeChunk(chunk);
+                    console.log(`[CHAT] Chunk ${chunkCount}:`, JSON.stringify(normalized).slice(0, 50));
                     if (!normalized) return;
                     assistantReply += normalized;
                     const safe = normalized.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
-                    // ignorer les erreurs d'écriture vers la socket
+                    console.error('[CHAT] Erreur chunk:', e.message);
                 }
             },
         });
+        console.log('[CHAT] Réponse Ollama reçue, chunks:', chunkCount);
 
         if (!finished) {
             res.write('data: [DONE]\n\n');
@@ -150,6 +156,36 @@ router.get('/api/llm/health', async (req, res) => {
         return res.status(503).json(health);
     }
     return res.status(200).json(health);
+});
+
+// Route de test streaming
+router.get('/api/test-stream', async (req, res) => {
+    console.log('[TEST] Début du test streaming');
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    if (res.flushHeaders) res.flushHeaders();
+
+    let chunkCount = 0;
+    const prompt = "Say hello in 5 words";
+    
+    try {
+        await generateOllamaResponse(prompt, {
+            timeoutMs: 15000,
+            onChunk: (chunk) => {
+                chunkCount++;
+                console.log(`[TEST] Chunk ${chunkCount}:`, JSON.stringify(chunk).slice(0, 50));
+                res.write(`data: ${chunk}\n\n`);
+            },
+        });
+        console.log('[TEST] Streaming complete, totalzchunks:', chunkCount);
+        res.write('data: [DONE]\n\n');
+        res.end();
+    } catch (err) {
+        console.error('[TEST] Error:', err.message);
+        res.write(`data: ERROR: ${err.message}\n\n`);
+        res.end();
+    }
 });
 
 module.exports = router;
