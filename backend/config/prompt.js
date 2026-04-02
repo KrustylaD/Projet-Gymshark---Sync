@@ -10,15 +10,15 @@ const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
 // En cas d'erreur de lecture, retourne une chaîne vide et logge l'erreur
 // pour faciliter le débogage sans casser l'exécution.
 function getSystemPrompt() {
-	try {
-		return fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
-	} catch (error) {
-		console.error('Impossible de lire le system prompt :', error.message);
-		return '';
-	}
+    try {
+        return fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
+    } catch (error) {
+        console.error('Impossible de lire le system prompt :', error.message);
+        return '';
+    }
 }
 
 module.exports = {
-	getSystemPrompt,
-	SYSTEM_PROMPT_PATH,
+    getSystemPrompt,
+    SYSTEM_PROMPT_PATH,
 };
