@@ -1,8 +1,12 @@
 const express = require('express');
+const cors = require('cors');
 
 // Point d'entrée du serveur Express
 const app = express();
 const PORT = 3000;
+
+// Middleware: CORS pour autoriser les requêtes du frontend
+app.use(cors());
 
 // Middleware: parser JSON pour les corps de requête
 app.use(express.json());

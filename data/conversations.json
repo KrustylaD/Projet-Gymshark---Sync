@@ -1,0 +1,18 @@
+{
+  "conv_1775140004622": {
+    "id": "conv_1775140004622",
+    "title": "Comment on envoie un mail ?",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Comment on envoie un mail ?"
+      },
+      {
+        "role": "assistant",
+        "content": "Pour envoyer un mail, commencez par ouvrir votre client Gmail dans Google Workspace. Rédigez-y ce que vous voulez dire et ajoutez la liste de destinataires séparés par des virgules à l'adresse de l'email. Puis cliquez sur \"Envoyer\". Comprenez ? ✅\n\nQuoi d'autre pour tes mails aujourd'hui, peut-être ?"
+      }
+    ],
+    "updatedAt": "2026-04-02T14:28:15.710Z",
+    "createdAt": "2026-04-02T14:28:15.710Z"
+  }
+}

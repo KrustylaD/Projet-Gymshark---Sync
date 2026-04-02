@@ -371,6 +371,49 @@ body::before {
     line-height: 1.4;
 }
 
+.section-historique {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.liste-historique {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.raccourci-historique {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-soft);
+    font-family: var(--font-main);
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-smooth), color var(--dur-fast);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.raccourci-historique:hover {
+    background: var(--bg-hover);
+    color: var(--text-main);
+}
+
+.raccourci-historique.est-actif {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
 .zone-aide {
     margin-top: auto;
 }
