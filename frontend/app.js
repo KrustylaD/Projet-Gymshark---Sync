@@ -679,7 +679,8 @@ async function sendAndStream(message, successStatus) {
     }
 }
 
-async function sendMessage() {
+async function sendMessage(event) {
+    if (event) event.preventDefault();
     if (state.isResponding) return;
     stopSpeechInput(true);
 
