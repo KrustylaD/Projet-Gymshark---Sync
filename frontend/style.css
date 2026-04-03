@@ -889,6 +889,20 @@ body::before {
     transform: translateY(-1px);
 }
 
+.bouton-micro.est-en-ecoute {
+    background: rgba(255, 97, 97, 0.16);
+    color: #ffd7d7;
+    box-shadow:
+        0 0 0 1px rgba(255, 97, 97, 0.24),
+        0 0 0 8px rgba(255, 97, 97, 0.08);
+    animation: pulse-micro 1.2s ease-in-out infinite;
+}
+
+.bouton-micro.est-en-ecoute:hover {
+    background: rgba(255, 97, 97, 0.22);
+    color: #fff1f1;
+}
+
 .boite-saisie.est-active .bouton-action,
 .boite-saisie:focus-within .bouton-action {
     color: #d8ddef;
@@ -1291,6 +1305,21 @@ body::before {
 @keyframes ripple-expand {
     from { opacity: 0.6; transform: translate(-50%, -50%) scale(0); }
     to   { opacity: 0;   transform: translate(-50%, -50%) scale(12); }
+}
+
+@keyframes pulse-micro {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow:
+            0 0 0 1px rgba(255, 97, 97, 0.24),
+            0 0 0 0 rgba(255, 97, 97, 0.12);
+    }
+    50% {
+        transform: scale(1.04);
+        box-shadow:
+            0 0 0 1px rgba(255, 97, 97, 0.36),
+            0 0 0 10px rgba(255, 97, 97, 0.04);
+    }
 }
 
 /* ============================================================

@@ -25,6 +25,7 @@ const champTexteSecondaire = document.querySelector(".champ-texte-secondaire");
 const boutonsEnvoyer = document.querySelectorAll(".bouton-envoyer");
 const boutonEnvoyer = document.querySelector(".bouton-envoyer");
 const boutonEnvoyerSecondaire = document.querySelector(".bouton-envoyer-secondaire");
+const boutonsMicro = document.querySelectorAll(".bouton-micro");
 const boiteSaisie = document.querySelector(".boite-saisie");
 const boiteSaisieSecondaire = document.querySelector(".boite-saisie-secondaire");
 
@@ -46,6 +47,12 @@ const messageInitial = filConversation ? filConversation.innerHTML : "";
 let timeoutStatut = null;
 let conversationId = localStorage.getItem('currentConversationId') || null;
 let enCoursDeReponse = false;
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let reconnaissanceVocale = null;
+let ecouteVocaleActive = false;
+let champVocalActif = null;
+let baseTranscriptionVocale = "";
+let transcriptFinal = "";
 const STORAGE_KEYS = {
     snapshot: "chatConversationSnapshot",
     draft: "chatDraftMessage",
@@ -239,6 +246,173 @@ function injecterPrompt(texte) {
 function setInputDisabled(disabled) {
     for (const champ of champsTexte) champ.disabled = disabled;
     for (const bouton of boutonsEnvoyer) bouton.disabled = disabled;
+}
+
+/* ============================================================
+   SAISIE VOCALE
+   ============================================================ */
+
+/**
+ * Retourne le champ a utiliser pour la saisie vocale.
+ *
+ * @returns {HTMLInputElement|null}
+ */
+function obtenirChampPourVoix() {
+    if (document.activeElement === champTexteSecondaire && champTexteSecondaire) {
+        return champTexteSecondaire;
+    }
+    if (document.activeElement === champTexte && champTexte) {
+        return champTexte;
+    }
+    if (vueChat?.classList.contains("est-en-conversation") && champTexteSecondaire) {
+        return champTexteSecondaire;
+    }
+    return champTexte;
+}
+
+/**
+ * Met a jour l'etat visuel des boutons micro.
+ *
+ * @param {boolean} estActif
+ */
+function mettreAJourEtatBoutonsMicro(estActif) {
+    for (const bouton of boutonsMicro) {
+        bouton.classList.toggle("est-en-ecoute", estActif);
+        bouton.setAttribute("aria-pressed", estActif ? "true" : "false");
+        bouton.title = estActif ? "Arreter la saisie vocale" : "Demarrer la saisie vocale";
+    }
+}
+
+/**
+ * Fusionne le texte deja present et la transcription courante.
+ *
+ * @param {string} prefixe
+ * @param {string} texte
+ * @returns {string}
+ */
+function composerTexteVocal(prefixe, texte) {
+    const base = (prefixe || "").trim();
+    const suite = (texte || "").trim();
+    if (!base) return suite;
+    if (!suite) return base;
+    return `${base} ${suite}`;
+}
+
+/**
+ * Traduit un code erreur de reconnaissance vocale en message utilisateur.
+ *
+ * @param {string} code
+ * @returns {string}
+ */
+function obtenirMessageErreurVocale(code) {
+    if (code === "not-allowed" || code === "service-not-allowed") {
+        return "L'acces au microphone a ete refuse.";
+    }
+    if (code === "no-speech") {
+        return "Aucune voix detectee.";
+    }
+    if (code === "audio-capture") {
+        return "Aucun microphone n'a ete detecte.";
+    }
+    if (code === "network") {
+        return "Erreur reseau pendant la saisie vocale.";
+    }
+    return "La saisie vocale a rencontre un probleme.";
+}
+
+/**
+ * Initialise l'instance de reconnaissance vocale si disponible.
+ *
+ * @returns {SpeechRecognition|null}
+ */
+function initialiserReconnaissanceVocale() {
+    if (!SpeechRecognitionAPI) return null;
+    if (reconnaissanceVocale) return reconnaissanceVocale;
+
+    reconnaissanceVocale = new SpeechRecognitionAPI();
+    reconnaissanceVocale.lang = "fr-FR";
+    reconnaissanceVocale.continuous = true;
+    reconnaissanceVocale.interimResults = true;
+    reconnaissanceVocale.maxAlternatives = 1;
+
+    reconnaissanceVocale.onstart = () => {
+        ecouteVocaleActive = true;
+        mettreAJourEtatBoutonsMicro(true);
+        afficherStatut("Saisie vocale active. Parlez, puis recliquez sur le micro pour arreter.");
+    };
+
+    reconnaissanceVocale.onresult = (event) => {
+        let interimTranscript = "";
+
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const resultat = event.results[index];
+            const texte = resultat[0]?.transcript || "";
+            if (resultat.isFinal) {
+                transcriptFinal += `${texte} `;
+            } else {
+                interimTranscript += texte;
+            }
+        }
+
+        if (!champVocalActif) return;
+        const texte = composerTexteVocal(baseTranscriptionVocale, `${transcriptFinal} ${interimTranscript}`);
+        synchroniserTousLesChamps(texte);
+        champVocalActif.focus();
+    };
+
+    reconnaissanceVocale.onerror = (event) => {
+        ecouteVocaleActive = false;
+        mettreAJourEtatBoutonsMicro(false);
+        afficherStatut(obtenirMessageErreurVocale(event.error));
+    };
+
+    reconnaissanceVocale.onend = () => {
+        const texteFinal = composerTexteVocal(baseTranscriptionVocale, transcriptFinal);
+        if (champVocalActif && texteFinal) {
+            synchroniserTousLesChamps(texteFinal);
+            champVocalActif.focus();
+        }
+
+        ecouteVocaleActive = false;
+        mettreAJourEtatBoutonsMicro(false);
+        if (transcriptFinal.trim()) {
+            afficherStatut("Saisie vocale terminee.");
+        }
+    };
+
+    return reconnaissanceVocale;
+}
+
+/**
+ * Demarre ou arrete la saisie vocale.
+ */
+function basculerSaisieVocale() {
+    const reconnaissance = initialiserReconnaissanceVocale();
+    if (!reconnaissance) {
+        afficherStatut("La saisie vocale n'est pas prise en charge par ce navigateur.");
+        return;
+    }
+
+    if (ecouteVocaleActive) {
+        reconnaissance.stop();
+        return;
+    }
+
+    champVocalActif = obtenirChampPourVoix();
+    if (!champVocalActif) {
+        afficherStatut("Aucun champ de saisie disponible.");
+        return;
+    }
+
+    champVocalActif.focus();
+    baseTranscriptionVocale = champVocalActif.value.trim();
+    transcriptFinal = "";
+
+    try {
+        reconnaissance.start();
+    } catch {
+        afficherStatut("Impossible de demarrer la saisie vocale pour le moment.");
+    }
 }
 
 /* ============================================================
@@ -1027,7 +1201,7 @@ for (const bouton of boutonsAction) {
         const action = bouton.dataset.action;
         if (action === "share") afficherStatut("Lien de partage prepare.");
         if (action === "attach") afficherStatut("Module d'ajout pret. Vous pouvez connecter un document ici.");
-        if (action === "voice") afficherStatut("Commande vocale simulee.");
+        if (action === "voice") basculerSaisieVocale();
     });
 }
 
