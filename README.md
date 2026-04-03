@@ -55,7 +55,7 @@ Projet-Gymshark---Sync/
 ollama serve
 
 # Télécharger le modèle (dans un autre terminal)
-ollama pull phi3:mini
+ollama pull llama3
 ```
 
 ### 2. Configurer le backend
