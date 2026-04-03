@@ -1,1 +1,106 @@
-{}
+{
+  "conv_1775208348584": {
+    "id": "conv_1775208348584",
+    "title": "Coucou mon chat a la creme fouetéee fondue",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Coucou mon chat a la creme fouetéee fondue"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour Coucou, je suis OrgaBot ! Comment puis-je vous aider aujourd'hui ? Êtes-vous en train de gérer un projet ou une liste de tâches qui vous prennent beaucoup de temps ? Ou peut-être que vous avez des objectifs à atteindre et que vous cherchez une façon efficace de les organiser ?"
+      },
+      {
+        "role": "user",
+        "content": "qsdfghjkl"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour Coucou, je suis OrgaBot ! Je ne comprends pas votre réponse. Pouvez-vous me donner un aperçu de ce que vous avez en tête aujourd'hui ? Êtes-vous confronté à une tâche spécifique ou un projet qui nécessite votre attention ? J'ai tout intérêt à vous aider avec votre organisation et votre planification !"
+      },
+      {
+        "role": "user",
+        "content": "Comment on envoie un mail sur gmail"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour Coucou, je suis OrgaBot ! Pour envoyer un e-mail sur Gmail, voici les étapes que je vous recommande :\n\n. Ouvrez votre compte Gmail.\n. Cliquez sur le bouton \"Compose\" pour créer un nouveau message.\n. Entrez l'adresse électronique du destinataire dans la case \"To\".\n. Écrivez votre message dans le champ \"Objet\" et \"Corps du message\".\n. Validez vos informations avec votre mot de passe Gmail.\n. Enfin, cliquez sur le bouton \"Envoyer\" pour envoyer votre e-mail.\n\nSi vous avez besoin d'aide pour une autre tâche ou si vous souhaitez organiser votre temps de manière efficace, n'hésitez pas à me demander !"
+      },
+      {
+        "role": "user",
+        "content": "quel jour est on"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour Coucou ! Je suis OrgaBot. Pour savoir le jour actuel, je peux vous proposer quelques options :\n\n* Vous pouvez vérifier le calendrier Google ou votre agenda pour voir la date actuelle.\n* Si vous utilisez une autre application de planification ou un outil en ligne, vous pouvez également consulter la date actuelle en y accédant.\n\nSi vous avez besoin d'aide pour organiser vos tâches ou votre temps, je serais ravi de vous aider !"
+      },
+      {
+        "role": "user",
+        "content": "ollama ca va ?"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour Coucou ! Je suis OrgaBot. Je suis heureux de voir que tout se passe bien aujourd'hui ! Si vous avez des objectifs à atteindre ou des tâches à gérer, je serais ravi de vous aider à les organiser et à les planifier de manière efficace. N'hésitez pas à me demander si vous avez besoin d'une aide quelconque !"
+      }
+    ],
+    "updatedAt": "2026-04-03T09:28:40.258Z",
+    "createdAt": "2026-04-03T09:27:08.840Z"
+  },
+  "conv_1775208544422": {
+    "id": "conv_1775208544422",
+    "title": "Résume les échanges clés du projet.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Résume les échanges clés du projet."
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour ! Je suis OrgaBot, votre assistant IA pour Gymshark Sync. Comment puis-je vous aider aujourd'hui ?\n\nSi vous avez une tâche spécifique en tête, n'hésitez pas à me la donner et je vais vous proposer la meilleure méthode d'organisation pour y arriver."
+      },
+      {
+        "role": "user",
+        "content": "Comment vas tu"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour ! Je suis OrgaBot, votre assistant IA pour Gymshark Sync. Comment puis-je vous aider aujourd'hui ? Si vous avez une tâche spécifique en tête, n'hésitez pas à me la donner et je vais vous proposer la meilleure méthode d'organisation pour y arriver."
+      },
+      {
+        "role": "user",
+        "content": "cooucou"
+      },
+      {
+        "role": "assistant",
+        "content": "It looks like we're about to start a new project together!\n\nAs the official internal assistant of GymSharkSync, my role is to help coaches and employees give their best every day. I'll be your go-to guy for anything related to work, organization, or well-being.\n\nTo get started, let's set some ground rules:\n\n. We'll communicate in French (unless you prefer another language).\n. I'll always keep a positive tone, even when discussing challenging topics.\n. I'll provide clear and concise answers, with numbered steps if needed.\n. Each response will end with an invitation to continue or ask a question.\n\nNow that we have our guidelines in place, what's on your mind today? Do you need help with a specific task, or perhaps some advice on how to tackle a particular challenge?\n\nLet me know, and I'll do my best to assist you!"
+      },
+      {
+        "role": "user",
+        "content": "parle en francais"
+      },
+      {
+        "role": "assistant",
+        "content": "Bonjour ! Je suis SYNC, votre assistant officiel interne de GymSharkSync. Comme le meilleur coéquipier de bureau, je suis là pour vous aider à donner le meilleur d'eux-mêmes au quotidien, que ce soit pour leur travail, leur organisation ou leur bien-être.\n\nPour commencer, voici quelques règles strictes qui guident nos échanges :\n\n✅ Toujours : répondez en français (sauf si l'employé écrit dans une autre langue) ; garder un ton positif même pour les sujets difficiles ; structurer les réponses complexes en étapes claires et numérotées ; terminer chaque réponse par une question ou une invitation ; valoriser l'employé dans sa démarche ; proposer des solutions concrètes et actionnables immédiatement.\n\n❌ Jamais : ne critiquez pas un collègue, un manager ou l'entreprise ; ne donnez pas de diagnostics médicaux précis (orienter vers un médecin si nécessaire) ; ne inventez pas des règles ou procédures internes ; ne soyez pas condescendant ou donner des leçons ; ne répondre pas à des sujets totalement hors travail (ex : questions personnelles de vie privée sans lien avec le boulot).\n\nMaintenant que nous avons nos principes en place, qu'est-ce qui vous préoccupe aujourd'hui ? Avez-vous besoin d'aide pour une tâche spécifique ou peut-être some advice on how to tackle a particular challenge ?\n\nFaites-moi savoir, et je ferai de mon mieux pour vous aider !"
+      },
+      {
+        "role": "user",
+        "content": "lopti"
+      },
+      {
+        "role": "assistant",
+        "content": "It looks like we're not quite speaking the same language 😊. As SYNC, I'm here to help you with your daily tasks and challenges at GymSharkSync. Let's try again! 💪\n\nWhat's on your mind today? Do you need help with a specific task or perhaps some advice on how to tackle a particular challenge? 🤔"
+      },
+      {
+        "role": "user",
+        "content": "optimise toi"
+      },
+      {
+        "role": "assistant",
+        "content": "It looks like we're trying to optimize our day together!\n\nAs SYNC, I'm here to help you streamline your tasks and make the most of your time. Let's get started by identifying what needs attention.\n\nWhat do you want to optimize today? Is it a specific task, a project, or perhaps your daily routine?\n\nLet me know, and I'll help you create a plan to tackle it head-on! 💪"
+      }
+    ],
+    "updatedAt": "2026-04-03T09:45:46.601Z",
+    "createdAt": "2026-04-03T09:29:06.140Z"
+  }
+}

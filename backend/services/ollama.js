@@ -9,7 +9,7 @@ const logger = require('../logger');
 
 const ollamaBaseUrl = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
 const API_URL = ollamaBaseUrl + '/api/generate';
-const MODEL = process.env.OLLAMA_MODEL || 'phi3:mini';
+const MODEL = process.env.OLLAMA_MODEL || 'llama3';
 
 /* --- Resolution du fetch (Node 18+ natif ou node-fetch en fallback) --- */
 let fetchFn = global.fetch;

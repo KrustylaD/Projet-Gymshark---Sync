@@ -46,6 +46,10 @@ const messageInitial = filConversation ? filConversation.innerHTML : "";
 let timeoutStatut = null;
 let conversationId = localStorage.getItem('currentConversationId') || null;
 let enCoursDeReponse = false;
+const STORAGE_KEYS = {
+    snapshot: "chatConversationSnapshot",
+    draft: "chatDraftMessage",
+};
 
 /* ============================================================
    ANIMATIONS D'ENTREE (IntersectionObserver)
@@ -93,6 +97,7 @@ function setConversationId(id) {
     } else {
         localStorage.removeItem('currentConversationId');
     }
+    sauvegarderSnapshotConversation();
 }
 
 /* ============================================================
@@ -148,6 +153,7 @@ function reinitialiserConversation() {
     if (filConversation) filConversation.innerHTML = messageInitial;
     synchroniserTousLesChamps("");
     setConversationId(null);
+    effacerSnapshotConversation();
 }
 
 /* ============================================================
@@ -190,6 +196,7 @@ function obtenirChampActif() {
  */
 function synchroniserTousLesChamps(valeur) {
     for (const champ of champsTexte) champ.value = valeur;
+    sauvegarderBrouillon(valeur);
     synchroniserEtatSaisie();
 }
 
@@ -239,20 +246,32 @@ function setInputDisabled(disabled) {
    ============================================================ */
 
 /**
- * Cree un bouton d'action textuel avec style inline.
+ * Cree un bouton d'action avec icone Font Awesome.
  *
- * @param {string}   label   - Texte affiche sur le bouton.
- * @param {string}   title   - Titre au survol.
- * @param {Function} onClick - Callback au clic.
+ * @param {string}   iconClass - Classe Font Awesome a afficher.
+ * @param {string}   title     - Titre au survol.
+ * @param {Function} onClick   - Callback au clic.
  * @returns {HTMLButtonElement}
  */
-function creerBoutonAction(label, title, onClick) {
+function creerBoutonAction(iconClass, title, onClick) {
     const btn = document.createElement("button");
-    btn.textContent = label;
+    btn.type = "button";
     btn.title = title;
-    btn.style.cssText = "padding:4px 8px;background:transparent;border:none;color:#888;cursor:pointer;font-size:11px;transition:color 0.2s ease;font-weight:500";
-    btn.addEventListener("mouseenter", () => { btn.style.color = "#aaa"; });
-    btn.addEventListener("mouseleave", () => { btn.style.color = "#888"; });
+    btn.setAttribute("aria-label", title);
+    btn.innerHTML = `<i class="${iconClass}" aria-hidden="true"></i>`;
+    btn.style.cssText = "width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:999px;color:#888;cursor:pointer;font-size:12px;transition:color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease";
+    btn.addEventListener("mouseenter", () => {
+        btn.style.color = "#f2f3f7";
+        btn.style.background = "rgba(255,255,255,0.08)";
+        btn.style.borderColor = "rgba(255,255,255,0.14)";
+        btn.style.transform = "translateY(-1px)";
+    });
+    btn.addEventListener("mouseleave", () => {
+        btn.style.color = "#888";
+        btn.style.background = "rgba(255,255,255,0.03)";
+        btn.style.borderColor = "rgba(255,255,255,0.06)";
+        btn.style.transform = "";
+    });
     btn.addEventListener("click", onClick);
     return btn;
 }
@@ -315,7 +334,7 @@ function ajouterMessage(contenu, type) {
     // Barre d'actions (copier + editer pour l'utilisateur)
     const barreActions = creerBarreActions();
 
-    const btnCopier = creerBoutonAction("copy", "Copier", () => {
+    const btnCopier = creerBoutonAction("fa-regular fa-copy", "Copier", () => {
         navigator.clipboard.writeText(contenu)
             .then(() => afficherStatut("Copie!"))
             .catch(() => afficherStatut("Erreur lors de la copie"));
@@ -323,7 +342,7 @@ function ajouterMessage(contenu, type) {
     barreActions.append(btnCopier);
 
     if (type === "utilisateur") {
-        const btnEditer = creerBoutonAction("edit", "Editer", () => {
+        const btnEditer = creerBoutonAction("fa-regular fa-pen-to-square", "Editer", () => {
             editerMessage(contenu, article, conteneurMessage);
         });
         barreActions.append(btnEditer);
@@ -333,7 +352,8 @@ function ajouterMessage(contenu, type) {
     attacherHoverActions(conteneurMessage, barreActions);
 
     filConversation.append(conteneurMessage);
-    conteneurMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+    faireDefilerConversationEnBas();
+    sauvegarderSnapshotConversation();
     return article;
 }
 
@@ -358,7 +378,7 @@ function creerMessageAssistantVide() {
 
     // Barre d'actions (copier uniquement)
     const barreActions = creerBarreActions();
-    const btnCopier = creerBoutonAction("copy", "Copier", () => {
+    const btnCopier = creerBoutonAction("fa-regular fa-copy", "Copier", () => {
         navigator.clipboard.writeText(paragraphe.textContent)
             .then(() => afficherStatut("Copie!"))
             .catch(() => afficherStatut("Erreur lors de la copie"));
@@ -368,7 +388,129 @@ function creerMessageAssistantVide() {
     attacherHoverActions(conteneurMessage, barreActions);
 
     filConversation.append(conteneurMessage);
+    faireDefilerConversationEnBas();
+    sauvegarderSnapshotConversation();
     return article;
+}
+
+/**
+ * Fait defiler uniquement la zone de conversation.
+ *
+ * @param {ScrollBehavior} [behavior="smooth"] - Type de scroll.
+ */
+function faireDefilerConversationEnBas(behavior = "smooth") {
+    if (!filConversation) return;
+    filConversation.scrollTo({
+        top: filConversation.scrollHeight,
+        behavior,
+    });
+}
+
+/**
+ * Extrait une version serialisable de la conversation visible.
+ *
+ * @returns {Array<{ role: string, content: string }>}
+ */
+function collecterMessagesDepuisDOM() {
+    if (!filConversation) return [];
+
+    return Array.from(filConversation.querySelectorAll(".message"))
+        .map((element) => {
+            const contenu = element.querySelector("p")?.textContent || "";
+            const role = element.classList.contains("message-assistant") ? "assistant" : "user";
+            return { role, content: contenu };
+        })
+        .filter((message) => message.content.trim().length > 0);
+}
+
+/**
+ * Sauvegarde un instantane local de la conversation en cours.
+ */
+function sauvegarderSnapshotConversation() {
+    try {
+        const snapshot = {
+            conversationId,
+            isConversationMode: !!vueChat?.classList.contains("est-en-conversation"),
+            messages: collecterMessagesDepuisDOM(),
+            savedAt: Date.now(),
+        };
+        sessionStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify(snapshot));
+    } catch {
+        // sessionStorage non disponible
+    }
+}
+
+/**
+ * Supprime l'instantane local de conversation.
+ */
+function effacerSnapshotConversation() {
+    try {
+        sessionStorage.removeItem(STORAGE_KEYS.snapshot);
+    } catch {
+        // sessionStorage non disponible
+    }
+}
+
+/**
+ * Sauvegarde le brouillon courant pour resister aux reloads.
+ *
+ * @param {string} valeur
+ */
+function sauvegarderBrouillon(valeur) {
+    try {
+        if (valeur && valeur.trim()) {
+            sessionStorage.setItem(STORAGE_KEYS.draft, valeur);
+        } else {
+            sessionStorage.removeItem(STORAGE_KEYS.draft);
+        }
+    } catch {
+        // sessionStorage non disponible
+    }
+}
+
+/**
+ * Restaure un instantane local de conversation si disponible.
+ *
+ * @returns {boolean} true si un instantane a ete restaure.
+ */
+function restaurerSnapshotConversation() {
+    try {
+        const brut = sessionStorage.getItem(STORAGE_KEYS.snapshot);
+        if (!brut || !filConversation) return false;
+
+        const snapshot = JSON.parse(brut);
+        const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : [];
+        if (!messages.length) return false;
+
+        filConversation.innerHTML = "";
+        for (const message of messages) {
+            ajouterMessage(message.content, message.role === "assistant" ? "assistant" : "utilisateur");
+        }
+
+        if (snapshot.isConversationMode) {
+            activerModeConversation();
+        }
+
+        faireDefilerConversationEnBas("auto");
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Restaure le brouillon en attente s'il existe.
+ */
+function restaurerBrouillon() {
+    try {
+        const draft = sessionStorage.getItem(STORAGE_KEYS.draft) || "";
+        if (draft) {
+            synchroniserTousLesChamps(draft);
+        }
+    } catch {
+        // sessionStorage non disponible
+    }
 }
 
 /* ============================================================
@@ -504,7 +646,8 @@ async function lireStreamSSE(response, articleAssistant) {
 
             if (paragraphe) {
                 paragraphe.textContent = fullReply;
-                articleAssistant.scrollIntoView({ behavior: "smooth", block: "end" });
+                faireDefilerConversationEnBas();
+                sauvegarderSnapshotConversation();
             }
         }
     }
@@ -658,7 +801,12 @@ function creerBoutonSuppressionConversation(conv) {
 
     btnSupprimer.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (!confirm(`Supprimer la conversation "${conv.title}" ?`)) return;
+        const confirme = await ouvrirModaleConfirmation({
+            titre: "Supprimer la conversation",
+            message: `Voulez-vous vraiment supprimer "${conv.title}" ? Cette action est definitive.`,
+            texteConfirmation: "Supprimer",
+        });
+        if (!confirme) return;
         try {
             const res = await fetch(`${API_BASE}/api/conversations/${conv.id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -676,6 +824,78 @@ function creerBoutonSuppressionConversation(conv) {
     });
 
     return btnSupprimer;
+}
+
+/**
+ * Affiche une modale de confirmation custom.
+ *
+ * @param {Object} options
+ * @param {string} options.titre
+ * @param {string} options.message
+ * @param {string} [options.texteConfirmation="Confirmer"]
+ * @returns {Promise<boolean>}
+ */
+function ouvrirModaleConfirmation({ titre, message, texteConfirmation = "Confirmer" }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "modale-overlay";
+
+        const modale = document.createElement("div");
+        modale.className = "modale-confirmation";
+        modale.setAttribute("role", "dialog");
+        modale.setAttribute("aria-modal", "true");
+        modale.setAttribute("aria-labelledby", "modale-confirmation-titre");
+
+        const titreElement = document.createElement("h3");
+        titreElement.id = "modale-confirmation-titre";
+        titreElement.textContent = titre;
+
+        const messageElement = document.createElement("p");
+        messageElement.textContent = message;
+
+        const actions = document.createElement("div");
+        actions.className = "modale-actions";
+
+        const boutonAnnuler = document.createElement("button");
+        boutonAnnuler.type = "button";
+        boutonAnnuler.className = "modale-bouton modale-bouton-secondaire";
+        boutonAnnuler.textContent = "Annuler";
+
+        const boutonConfirmer = document.createElement("button");
+        boutonConfirmer.type = "button";
+        boutonConfirmer.className = "modale-bouton modale-bouton-danger";
+        boutonConfirmer.textContent = texteConfirmation;
+
+        let resolu = false;
+        const fermer = (valeur) => {
+            if (resolu) return;
+            resolu = true;
+            document.removeEventListener("keydown", gererClavier);
+            overlay.remove();
+            resolve(valeur);
+        };
+
+        const gererClavier = (event) => {
+            if (event.key === "Escape") {
+                fermer(false);
+            }
+        };
+
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) {
+                fermer(false);
+            }
+        });
+        boutonAnnuler.addEventListener("click", () => fermer(false));
+        boutonConfirmer.addEventListener("click", () => fermer(true));
+        document.addEventListener("keydown", gererClavier);
+
+        actions.append(boutonAnnuler, boutonConfirmer);
+        modale.append(titreElement, messageElement, actions);
+        overlay.append(modale);
+        document.body.append(overlay);
+        boutonConfirmer.focus();
+    });
 }
 
 /**
@@ -699,6 +919,8 @@ async function chargerConversation(id) {
 
         activerVue("chat");
         activerModeConversation();
+        faireDefilerConversationEnBas("auto");
+        sauvegarderSnapshotConversation();
         chargerHistorique();
         afficherStatut("Conversation chargee.");
     } catch {
@@ -748,6 +970,8 @@ window.addEventListener("load", () => {
         body.classList.add("page-chargee");
         activerVue("chat");
         afficherStatut("Vue active : Chat");
+        restaurerSnapshotConversation();
+        restaurerBrouillon();
         chargerHistorique();
 
         // Restaurer la conversation active si elle existait
