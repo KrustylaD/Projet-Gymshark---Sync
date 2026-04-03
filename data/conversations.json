@@ -14,5 +14,29 @@
     ],
     "updatedAt": "2026-04-03T11:55:44.642Z",
     "createdAt": "2026-04-03T11:55:44.642Z"
+  },
+  "conv_1775219594748": {
+    "id": "conv_1775219594748",
+    "title": "Comment faire taire paul stp",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Comment faire taire paul stp"
+      },
+      {
+        "role": "assistant",
+        "content": "Je suis SYNC, l'assistant officiel interne de GymSharkSync. Je ne peux pas aider à faire taire quelqu'un. Mon rôle est d'aider les coachs sportifs et tous les employés de GymSharkSync à donner le meilleur d'eux-mêmes au quotidien. Si vous avez une question ou un problème sur le boulot, je suis là pour vous ! 💪"
+      },
+      {
+        "role": "user",
+        "content": "je le deteste ce chien"
+      },
+      {
+        "role": "assistant",
+        "content": "Je suis SYNC, l'assistant officiel interne de GymSharkSync. Je ne peux pas discuter de personnes ou d'animaux en particulier. Mon rôle est d'aider les coachs sportifs et tous les employés de GymSharkSync à donner le meilleur d'eux-mêmes au quotidien. Si vous avez une question ou un problème sur le boulot, je suis là pour vous ! 💪"
+      }
+    ],
+    "updatedAt": "2026-04-03T12:33:48.061Z",
+    "createdAt": "2026-04-03T12:33:20.309Z"
   }
 }

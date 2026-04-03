@@ -1450,7 +1450,7 @@ function initPage() {
             if (state.conversationId) {
                 loadConversation(state.conversationId);
             }
-        }, 900);
+        }, 2200);
     });
 }
 
