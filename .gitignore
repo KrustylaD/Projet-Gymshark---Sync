@@ -2,3 +2,4 @@ node_modules
 .env
 data/conversations.json
 conversations.json
+data/conversations.json
