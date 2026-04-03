@@ -1,43 +1,57 @@
 const { getSystemPrompt } = require('../config/prompt');
+const logger = require('../logger');
+
+/* ============================================================
+   SERVICE OLLAMA
+   Gere la communication avec le serveur Ollama (LLM local).
+   Supporte le streaming et le health check.
+   ============================================================ */
 
 const ollamaBaseUrl = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
-const api_url = ollamaBaseUrl + '/api/generate';
-const model = process.env.OLLAMA_MODEL || 'phi3:mini';
+const API_URL = ollamaBaseUrl + '/api/generate';
+const MODEL = process.env.OLLAMA_MODEL || 'phi3:mini';
 
-// Préférer le fetch global si disponible (Node 18+). Sinon utiliser node-fetch si installé.
+/* --- Resolution du fetch (Node 18+ natif ou node-fetch en fallback) --- */
 let fetchFn = global.fetch;
 if (!fetchFn) {
     try {
         fetchFn = require('node-fetch');
     } catch (e) {
-        // fetch peut être disponible à l'exécution; on lèvera une erreur utile plus tard si absent
+        // fetch sera peut-etre disponible a l'execution ;
+        // une erreur explicite sera levee plus tard si absent
     }
 }
 
-// extractTextPiece(line): à partir d'une ligne brute reçue (SSE/JSON/texte brut),
-// extraire la portion de texte lisible par l'humain.
-// Conserve les espaces significatifs (n'enlève pas les espaces entre mots).
+/**
+ * Extrait la portion de texte lisible d'une ligne brute recue
+ * depuis le stream Ollama (SSE / JSON / texte brut).
+ * Conserve les espaces significatifs entre les mots.
+ *
+ * @param {string} line - Ligne brute du stream.
+ * @returns {string} Texte extrait, ou chaine vide si rien d'utile.
+ */
 function extractTextPiece(line) {
     let value = String(line || '');
     if (value === '') return '';
 
-    // Supprime un éventuel préfixe SSE "data:" tout en préservant les autres espaces
+    // Supprime un eventuel prefixe SSE "data:"
     if (/^\s*data:\s*/.test(value)) {
         value = value.replace(/^\s*data:\s*/, '');
     }
-    // Considère un "[DONE]" comme marqueur de fin de flux
+
+    // Marqueur de fin de flux
     if (value.trim() === '[DONE]') return '';
 
     try {
         const parsed = JSON.parse(value);
 
-        // Format courant d'Ollama /api/generate: { response: "...", done: false }
+        // Format Ollama /api/generate : { response: "...", done: false }
         if (typeof parsed.response === 'string') return parsed.response;
 
-        // Certains endpoints envoient { message: { content: '...' } }
+        // Format /api/chat : { message: { content: '...' } }
         if (parsed.message && typeof parsed.message.content === 'string') return parsed.message.content;
 
-        // Raccourcis de compatibilité
+        // Formats alternatifs de compatibilite
         if (typeof parsed.output_text === 'string') return parsed.output_text;
         if (typeof parsed.text === 'string') return parsed.text;
         if (parsed?.output && Array.isArray(parsed.output)) {
@@ -45,33 +59,40 @@ function extractTextPiece(line) {
             if (first && typeof first.content === 'string') return first.content;
         }
 
-        // Métadonnées seules -> ignorer
+        // Metadonnees seules -> ignorer
         return '';
     } catch (e) {
-        // Pas du JSON -> renvoyer la valeur brute (préserve les espaces)
+        // Pas du JSON -> renvoyer la valeur brute (preserve les espaces)
         return value;
     }
 }
 
 /**
- * generateOllamaResponse(prompt, { onChunk, timeoutMs })
- * - Envoie une requête en streaming vers /api/generate d'Ollama et appelle `onChunk(text)`
- *   pour chaque fragment textuel reçu.
- * - `timeoutMs` est traité comme un timeout d'inactivité ré-armé à chaque fragment.
- * - Retourne le texte assemblé une fois le flux terminé.
+ * Envoie une requete en streaming vers /api/generate d'Ollama
+ * et appelle `onChunk(text)` pour chaque fragment textuel recu.
+ *
+ * @param {string} prompt             - Le prompt complet a envoyer au LLM.
+ * @param {Object} options
+ * @param {Function} [options.onChunk]  - Callback appele avec chaque fragment de texte.
+ * @param {number}   [options.timeoutMs] - Timeout d'inactivite (re-arme a chaque fragment).
+ * @returns {Promise<string>} Le texte complet assemble une fois le flux termine.
  */
 async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     const controller = new AbortController();
-    const signal = controller.signal;
+    const { signal } = controller;
 
     const parsedTimeout = Number(timeoutMs);
     const hasTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0;
     let timeoutId;
+
+    /** Arme (ou re-arme) le timer d'inactivite. */
     const armTimeout = () => {
         if (!hasTimeout) return;
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
     };
+
+    /** Annule le timer d'inactivite en cours. */
     const clearTimeoutIfNeeded = () => {
         if (timeoutId) {
             clearTimeout(timeoutId);
@@ -79,27 +100,28 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         }
     };
 
-    // Timeout d'inactivité : armer maintenant et ré-armer à chaque fragment reçu
     armTimeout();
 
+    /* --- Construction du payload --- */
     const systemPrompt = getSystemPrompt();
     const payload = {
-        model,
+        model: MODEL,
         prompt: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt,
         stream: true,
-        // Paramètres d'optimisation pour la vitesse
-        num_predict: 400,          // Limiter la longueur max des réponses (plus rapide)
-        temperature: 0.6,          // Réponses plus déterministes et rapides
-        top_k: 40,                 // Moins de choix = plus rapide
-        top_p: 0.85,               // Limiter la diversité
-        repeat_penalty: 1.1,       // Éviter les répétitions → réponses plus courtes
+        num_predict: 400,
+        temperature: 0.6,
+        top_k: 40,
+        top_p: 0.85,
+        repeat_penalty: 1.1,
     };
 
     if (!fetchFn) {
         throw new Error('No fetch implementation available. Install node-fetch or run on Node 18+');
     }
 
-    const res = await fetchFn(api_url, {
+    logger.systemInfo(`Requete Ollama → ${MODEL}`);
+
+    const res = await fetchFn(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream, text/plain, application/json' },
         body: JSON.stringify(payload),
@@ -111,13 +133,18 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         const txt = await res.text().catch(() => '');
         const err = new Error(`Ollama HTTP error: ${res.status} ${res.statusText} - ${txt}`);
         err.status = res.status;
+        logger.fatal(`Ollama HTTP ${res.status}: ${txt.slice(0, 100)}`, 'services/ollama.js');
         throw err;
     }
 
-    // Lit le flux de réponse et émet les fragments via onChunk si fourni.
+    /* --- Lecture du flux de reponse --- */
     const decoder = new TextDecoder();
     let result = '';
 
+    /**
+     * Traite un fragment de texte : l'ajoute au resultat,
+     * re-arme le timeout et appelle le callback.
+     */
     const emitPiece = (textPiece) => {
         if (!textPiece) return;
         result += textPiece;
@@ -126,11 +153,15 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
             try {
                 onChunk(textPiece);
             } catch (e) {
-                // ignore callback errors
+                // Ignore les erreurs du callback
             }
         }
     };
 
+    /**
+     * Decoupe un bloc de texte en lignes et extrait
+     * le contenu utile de chacune.
+     */
     const processChunkText = (chunkText) => {
         const lines = String(chunkText).split(/\r?\n/).filter(Boolean);
         for (const line of lines) {
@@ -139,9 +170,8 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     };
 
     try {
-        // Prend en charge à la fois les Web Streams (fetch global Node 18+) et
-        // les streams lisibles Node classiques (ex. node-fetch)
         if (res.body && typeof res.body.getReader === 'function') {
+            /* --- Web Streams (fetch natif Node 18+) --- */
             const reader = res.body.getReader();
             let pending = '';
 
@@ -160,7 +190,9 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
 
             const tail = pending + decoder.decode();
             if (tail) processChunkText(tail);
+
         } else if (res.body && typeof res.body.on === 'function') {
+            /* --- Node.js Readable stream (node-fetch) --- */
             await new Promise((resolve, reject) => {
                 let pending = '';
 
@@ -218,8 +250,9 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
                 res.body.on('error', onError);
                 if (signal) signal.addEventListener('abort', onAbort, { once: true });
             });
+
         } else {
-            // Repli : lire le texte complet si le flux n'est pas disponible
+            /* --- Fallback : lecture complete du texte --- */
             const txt = await res.text().catch(() => '');
             processChunkText(txt);
         }
@@ -227,6 +260,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         if (err.name === 'AbortError' || err.message === 'AbortError') {
             const e = new Error('Ollama request aborted (timeout)');
             e.cause = err;
+            logger.warn('Ollama request timeout', 'services/ollama.js');
             throw e;
         }
         throw err;
@@ -238,21 +272,24 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
 }
 
 /**
- * getOllamaHealth(): lightweight health check for Ollama server.
- * Attempts to GET /api/tags and returns a small object describing availability.
+ * Verifie la disponibilite du serveur Ollama en interrogeant /api/tags.
+ *
+ * @param {Object} options
+ * @param {number} [options.timeoutMs=5000] - Timeout du health check en ms.
+ * @returns {Promise<Object>} Objet { ok, url, model, ... } decrivant l'etat.
  */
 async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
     if (!fetchFn) {
         return {
             ok: false,
             url: ollamaBaseUrl,
-            model,
+            model: MODEL,
             error: 'No fetch implementation available. Install node-fetch or run on Node 18+',
         };
     }
 
     const controller = new AbortController();
-    const signal = controller.signal;
+    const { signal } = controller;
     const parsedTimeout = Number(timeoutMs);
     const hasTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0;
     let timeoutId;
@@ -273,7 +310,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
             return {
                 ok: false,
                 url: ollamaBaseUrl,
-                model,
+                model: MODEL,
                 error: `HTTP ${res.status} ${res.statusText}`,
                 details: txt,
             };
@@ -287,15 +324,15 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
         return {
             ok: true,
             url: ollamaBaseUrl,
-            model,
-            modelAvailable: models.includes(model),
+            model: MODEL,
+            modelAvailable: models.includes(MODEL),
             models,
         };
     } catch (err) {
         return {
             ok: false,
             url: ollamaBaseUrl,
-            model,
+            model: MODEL,
             error: err.name === 'AbortError' ? 'Health check timeout' : err.message,
         };
     } finally {
@@ -307,4 +344,3 @@ module.exports = {
     generateOllamaResponse,
     getOllamaHealth,
 };
-

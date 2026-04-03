@@ -1,23 +1,35 @@
 const express = require('express');
 const cors = require('cors');
+const logger = require('./logger');
 
-// Point d'entrée du serveur Express
+/* ============================================================
+   POINT D'ENTREE DU SERVEUR EXPRESS
+   ============================================================ */
+
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Middleware: CORS pour autoriser les requêtes du frontend
+/* --- Middlewares globaux --- */
 app.use(cors());
-
-// Middleware: parser JSON pour les corps de requête
 app.use(express.json());
+app.use(logger.morganMiddleware());
 
-// Import des routes de l'API
+/* --- Montage des routes API --- */
 const chatRoutes = require('./routes/chat');
-
-// Montage des routes (les routes exportées gèrent leurs propres chemins)
 app.use(chatRoutes);
 
-// Démarrage du serveur
+/* --- Demarrage du serveur --- */
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    logger.systemStart(`Serveur demarre sur :${PORT}`);
+});
+
+/* --- Arret propre --- */
+process.on('SIGINT', () => {
+    logger.systemStop('Arret du serveur (SIGINT)');
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    logger.systemStop('Arret du serveur (SIGTERM)');
+    process.exit(0);
 });

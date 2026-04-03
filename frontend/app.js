@@ -1,15 +1,24 @@
+/* ============================================================
+   GYMSHARK SYNC — APPLICATION FRONTEND
+   Gere l'interface de chat, la navigation entre vues,
+   l'historique des conversations et les effets visuels.
+   ============================================================ */
+
 const API_BASE = 'http://localhost:3000';
+
+/* ============================================================
+   REFERENCES DOM
+   ============================================================ */
 
 const racine = document.documentElement;
 const body = document.body;
 const ecranChargement = document.querySelector(".ecran-chargement");
-const elementsAnimables = document.querySelectorAll(
-    ".logo, .bouton-lateral, .section-salutation, .boite-saisie, .suggestion, .carte, .zone-aide .aide-bouton, .entete, .element-liste, .message"
-);
 const vues = document.querySelectorAll(".vue");
 const vueChat = document.querySelector('.vue[data-view="chat"]');
 const boutonsNavigation = document.querySelectorAll("[data-view-target]");
 const boutonsInteractifs = document.querySelectorAll("button");
+
+/* --- Champs de saisie --- */
 const champsTexte = document.querySelectorAll(".champ-texte");
 const champTexte = document.querySelector(".champ-texte");
 const champTexteSecondaire = document.querySelector(".champ-texte-secondaire");
@@ -18,29 +27,33 @@ const boutonEnvoyer = document.querySelector(".bouton-envoyer");
 const boutonEnvoyerSecondaire = document.querySelector(".bouton-envoyer-secondaire");
 const boiteSaisie = document.querySelector(".boite-saisie");
 const boiteSaisieSecondaire = document.querySelector(".boite-saisie-secondaire");
+
+/* --- Elements de contenu --- */
 const suggestions = document.querySelectorAll(".suggestion");
 const cartesActions = document.querySelectorAll(".carte-action");
 const filConversation = document.querySelector(".fil-conversation");
 const zoneStatut = document.querySelector(".zone-statut");
 const boutonsAction = document.querySelectorAll("[data-action]");
-const messageInitial = filConversation ? filConversation.innerHTML : "";
 const listeHistorique = document.querySelector(".liste-historique");
+
+/** Contenu initial du fil de conversation (pour le reset). */
+const messageInitial = filConversation ? filConversation.innerHTML : "";
+
+/* ============================================================
+   ETAT DE L'APPLICATION
+   ============================================================ */
 
 let timeoutStatut = null;
 let conversationId = localStorage.getItem('currentConversationId') || null;
 let enCoursDeReponse = false;
 
-// Sauvegarder le conversationId chaque fois qu'il change
-function setConversationId(id) {
-    conversationId = id;
-    if (id) {
-        localStorage.setItem('currentConversationId', id);
-        console.log('[FRONTEND] conversationId sauvegardé:', id);
-    } else {
-        localStorage.removeItem('currentConversationId');
-        console.log('[FRONTEND] conversationId réinitialisé');
-    }
-}
+/* ============================================================
+   ANIMATIONS D'ENTREE (IntersectionObserver)
+   ============================================================ */
+
+const elementsAnimables = document.querySelectorAll(
+    ".logo, .bouton-lateral, .section-salutation, .boite-saisie, .suggestion, .carte, .zone-aide .aide-bouton, .entete, .element-liste, .message"
+);
 
 for (const [index, element] of elementsAnimables.entries()) {
     element.classList.add("animable");
@@ -56,16 +69,41 @@ const observateur = new IntersectionObserver(
             }
         }
     },
-    {
-        threshold: 0.1,
-        rootMargin: "0px 0px -6% 0px"
-    }
+    { threshold: 0.1, rootMargin: "0px 0px -6% 0px" }
 );
 
 for (const element of elementsAnimables) {
     observateur.observe(element);
 }
 
+/* ============================================================
+   GESTION DU CONVERSATION ID
+   ============================================================ */
+
+/**
+ * Met a jour l'identifiant de conversation actif
+ * et le persiste dans le localStorage.
+ *
+ * @param {string|null} id - Nouvel identifiant, ou null pour reinitialiser.
+ */
+function setConversationId(id) {
+    conversationId = id;
+    if (id) {
+        localStorage.setItem('currentConversationId', id);
+    } else {
+        localStorage.removeItem('currentConversationId');
+    }
+}
+
+/* ============================================================
+   BARRE DE STATUT
+   ============================================================ */
+
+/**
+ * Affiche un message temporaire dans la zone de statut.
+ *
+ * @param {string} message - Texte a afficher.
+ */
 function afficherStatut(message) {
     if (!zoneStatut) return;
     zoneStatut.textContent = message;
@@ -76,20 +114,35 @@ function afficherStatut(message) {
     }, 2200);
 }
 
+/* ============================================================
+   NAVIGATION ENTRE VUES
+   ============================================================ */
+
+/**
+ * Active une vue par son nom et met a jour l'etat actif des boutons.
+ *
+ * @param {string} nomVue - Nom de la vue (chat, search, shortcuts, help, docs).
+ */
 function activerVue(nomVue) {
     for (const vue of vues) {
         vue.classList.toggle("vue-active", vue.dataset.view === nomVue);
     }
     for (const bouton of boutonsNavigation) {
-        const estActif = bouton.dataset.viewTarget === nomVue;
-        bouton.classList.toggle("est-actif", estActif);
+        bouton.classList.toggle("est-actif", bouton.dataset.viewTarget === nomVue);
     }
 }
 
+/**
+ * Bascule l'interface en mode conversation
+ * (masque l'accueil, affiche le fil et la barre fixe).
+ */
 function activerModeConversation() {
     if (vueChat) vueChat.classList.add("est-en-conversation");
 }
 
+/**
+ * Reinitialise l'interface a l'etat d'accueil du chat.
+ */
 function reinitialiserConversation() {
     if (vueChat) vueChat.classList.remove("est-en-conversation");
     if (filConversation) filConversation.innerHTML = messageInitial;
@@ -97,6 +150,15 @@ function reinitialiserConversation() {
     setConversationId(null);
 }
 
+/* ============================================================
+   GESTION DES CHAMPS DE SAISIE
+   ============================================================ */
+
+/**
+ * Joue une micro-animation de mise en avant sur une boite de saisie.
+ *
+ * @param {HTMLElement} [boite=boiteSaisie] - Element a animer.
+ */
 function mettreEnAvantChamp(boite = boiteSaisie) {
     if (!boite) return;
     boite.animate(
@@ -109,6 +171,11 @@ function mettreEnAvantChamp(boite = boiteSaisie) {
     );
 }
 
+/**
+ * Retourne le champ de saisie actuellement actif (principal ou secondaire).
+ *
+ * @returns {HTMLInputElement} Le champ texte avec le focus.
+ */
 function obtenirChampActif() {
     if (champTexteSecondaire && document.activeElement === champTexteSecondaire) {
         return champTexteSecondaire;
@@ -116,11 +183,20 @@ function obtenirChampActif() {
     return champTexte;
 }
 
+/**
+ * Synchronise la valeur de tous les champs de saisie.
+ *
+ * @param {string} valeur - Texte a injecter dans tous les champs.
+ */
 function synchroniserTousLesChamps(valeur) {
     for (const champ of champsTexte) champ.value = valeur;
     synchroniserEtatSaisie();
 }
 
+/**
+ * Met a jour la classe CSS "est-active" des boites de saisie
+ * en fonction du contenu et du focus.
+ */
 function synchroniserEtatSaisie() {
     const valeur = obtenirChampActif()?.value?.trim() || champTexte?.value?.trim() || "";
     if (boiteSaisie && champTexte) {
@@ -133,6 +209,12 @@ function synchroniserEtatSaisie() {
     }
 }
 
+/**
+ * Injecte un texte pre-defini dans le champ de saisie principal
+ * et bascule sur la vue chat.
+ *
+ * @param {string} texte - Prompt a injecter.
+ */
 function injecterPrompt(texte) {
     if (!champTexte || !texte) return;
     synchroniserTousLesChamps(texte);
@@ -142,379 +224,344 @@ function injecterPrompt(texte) {
     afficherStatut(`Prompt charge : ${texte}`);
 }
 
+/**
+ * Active ou desactive tous les champs et boutons d'envoi.
+ *
+ * @param {boolean} disabled - true pour desactiver, false pour reactiver.
+ */
+function setInputDisabled(disabled) {
+    for (const champ of champsTexte) champ.disabled = disabled;
+    for (const bouton of boutonsEnvoyer) bouton.disabled = disabled;
+}
+
+/* ============================================================
+   CREATION DE BOUTONS D'ACTION (copier, editer)
+   ============================================================ */
+
+/**
+ * Cree un bouton d'action textuel avec style inline.
+ *
+ * @param {string}   label   - Texte affiche sur le bouton.
+ * @param {string}   title   - Titre au survol.
+ * @param {Function} onClick - Callback au clic.
+ * @returns {HTMLButtonElement}
+ */
+function creerBoutonAction(label, title, onClick) {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    btn.title = title;
+    btn.style.cssText = "padding:4px 8px;background:transparent;border:none;color:#888;cursor:pointer;font-size:11px;transition:color 0.2s ease;font-weight:500";
+    btn.addEventListener("mouseenter", () => { btn.style.color = "#aaa"; });
+    btn.addEventListener("mouseleave", () => { btn.style.color = "#888"; });
+    btn.addEventListener("click", onClick);
+    return btn;
+}
+
+/**
+ * Cree une barre d'actions (copier, editer...) pour un message.
+ * La barre est invisible par defaut et apparait au survol du conteneur.
+ *
+ * @returns {HTMLDivElement}
+ */
+function creerBarreActions() {
+    const barre = document.createElement("div");
+    barre.style.cssText = "display:flex;gap:10px;margin-top:6px;opacity:0;transition:opacity 0.2s ease;pointer-events:none";
+    return barre;
+}
+
+/**
+ * Attache les listeners de survol pour afficher/masquer la barre d'actions.
+ *
+ * @param {HTMLElement} conteneur   - Element parent (conteneur message).
+ * @param {HTMLElement} barreActions - Barre d'actions a afficher/masquer.
+ */
+function attacherHoverActions(conteneur, barreActions) {
+    conteneur.addEventListener("mouseenter", () => {
+        barreActions.style.opacity = "1";
+        barreActions.style.pointerEvents = "auto";
+    });
+    conteneur.addEventListener("mouseleave", () => {
+        barreActions.style.opacity = "0";
+        barreActions.style.pointerEvents = "none";
+    });
+}
+
+/* ============================================================
+   GESTION DES MESSAGES
+   ============================================================ */
+
+/**
+ * Ajoute un message (utilisateur ou assistant) dans le fil de conversation.
+ *
+ * @param {string} contenu - Texte du message.
+ * @param {string} type    - "utilisateur" ou "assistant".
+ * @returns {HTMLElement|null} L'element <article> du message cree.
+ */
 function ajouterMessage(contenu, type) {
     if (!filConversation || !contenu) return null;
-    
-    const conteneurMessage = document.createElement("div");
-    conteneurMessage.style.display = "flex";
-    conteneurMessage.style.flexDirection = "column";
-    conteneurMessage.style.marginBottom = "12px";
-    conteneurMessage.style.alignItems = type === "utilisateur" ? "flex-end" : "flex-start";
 
+    // Conteneur du message (flex column)
+    const conteneurMessage = document.createElement("div");
+    conteneurMessage.style.cssText = `display:flex;flex-direction:column;margin-bottom:12px;align-items:${type === "utilisateur" ? "flex-end" : "flex-start"}`;
+
+    // Article du message
     const article = document.createElement("article");
     article.className = `message message-${type}`;
-    
     const paragraphe = document.createElement("p");
     paragraphe.textContent = contenu;
     article.append(paragraphe);
-    
     conteneurMessage.append(article);
-    
-    // Ajouter les actions en dessous pour tous les messages
-    const barreActions = document.createElement("div");
-    barreActions.style.display = "flex";
-    barreActions.style.gap = "10px";
-    barreActions.style.marginTop = "6px";
-    barreActions.style.opacity = "0";
-    barreActions.style.transition = "opacity 0.2s ease";
-    barreActions.style.pointerEvents = "none";
 
-    // Bouton copier pour tous les messages
-    const btnCopier = document.createElement("button");
-    btnCopier.textContent = "copy";
-    btnCopier.title = "Copier";
-    btnCopier.style.padding = "4px 8px";
-    btnCopier.style.background = "transparent";
-    btnCopier.style.border = "none";
-    btnCopier.style.color = "#888";
-    btnCopier.style.cursor = "pointer";
-    btnCopier.style.fontSize = "11px";
-    btnCopier.style.transition = "color 0.2s ease";
-    btnCopier.style.fontWeight = "500";
+    // Barre d'actions (copier + editer pour l'utilisateur)
+    const barreActions = creerBarreActions();
 
-    btnCopier.addEventListener("mouseenter", () => {
-        btnCopier.style.color = "#aaa";
+    const btnCopier = creerBoutonAction("copy", "Copier", () => {
+        navigator.clipboard.writeText(contenu)
+            .then(() => afficherStatut("Copie!"))
+            .catch(() => afficherStatut("Erreur lors de la copie"));
     });
-
-    btnCopier.addEventListener("mouseleave", () => {
-        btnCopier.style.color = "#888";
-    });
-
-    btnCopier.addEventListener("click", () => {
-        navigator.clipboard.writeText(contenu).then(() => {
-            afficherStatut("Copié!");
-        }).catch(() => {
-            afficherStatut("Erreur lors de la copie");
-        });
-    });
-
     barreActions.append(btnCopier);
 
-    // Bouton éditer seulement pour messages utilisateur
     if (type === "utilisateur") {
-        const btnEditer = document.createElement("button");
-        btnEditer.textContent = "edit";
-        btnEditer.title = "Éditer";
-        btnEditer.style.padding = "4px 8px";
-        btnEditer.style.background = "transparent";
-        btnEditer.style.border = "none";
-        btnEditer.style.color = "#888";
-        btnEditer.style.cursor = "pointer";
-        btnEditer.style.fontSize = "11px";
-        btnEditer.style.transition = "color 0.2s ease";
-        btnEditer.style.fontWeight = "500";
-
-        btnEditer.addEventListener("mouseenter", () => {
-            btnEditer.style.color = "#aaa";
-        });
-
-        btnEditer.addEventListener("mouseleave", () => {
-            btnEditer.style.color = "#888";
-        });
-        
-        btnEditer.addEventListener("click", () => {
+        const btnEditer = creerBoutonAction("edit", "Editer", () => {
             editerMessage(contenu, article, conteneurMessage);
         });
-        
         barreActions.append(btnEditer);
     }
 
     conteneurMessage.append(barreActions);
+    attacherHoverActions(conteneurMessage, barreActions);
 
-    // Afficher/masquer les actions au hover
-    conteneurMessage.addEventListener("mouseenter", () => {
-        barreActions.style.opacity = "1";
-        barreActions.style.pointerEvents = "auto";
-    });
-
-    conteneurMessage.addEventListener("mouseleave", () => {
-        barreActions.style.opacity = "0";
-        barreActions.style.pointerEvents = "none";
-    });
-    
     filConversation.append(conteneurMessage);
     conteneurMessage.scrollIntoView({ behavior: "smooth", block: "end" });
     return article;
 }
 
-// Fonction pour éditer un message
-function editerMessage(contenuOriginal, articleOriginal, conteneurMessage) {
-    // Créer une boîte d'édition
-    const boiteEdition = document.createElement("div");
-    boiteEdition.style.position = "fixed";
-    boiteEdition.style.top = "50%";
-    boiteEdition.style.left = "50%";
-    boiteEdition.style.transform = "translate(-50%, -50%)";
-    boiteEdition.style.background = "#1a1a2e";
-    boiteEdition.style.border = "2px solid #4a7c9e";
-    boiteEdition.style.borderRadius = "8px";
-    boiteEdition.style.padding = "20px";
-    boiteEdition.style.zIndex = "9999";
-    boiteEdition.style.minWidth = "400px";
-    boiteEdition.style.boxShadow = "0 10px 40px rgba(0,0,0,0.5)";
-    boiteEdition.style.color = "#fff";
-    
-    const titre = document.createElement("h3");
-    titre.textContent = "Éditer le message";
-    titre.style.marginTop = "0";
-    boiteEdition.append(titre);
-    
-    const textarea = document.createElement("textarea");
-    textarea.value = contenuOriginal;
-    textarea.style.width = "100%";
-    textarea.style.height = "120px";
-    textarea.style.padding = "10px";
-    textarea.style.marginBottom = "12px";
-    textarea.style.borderRadius = "4px";
-    textarea.style.border = "1px solid #4a7c9e";
-    textarea.style.background = "#0f3460";
-    textarea.style.color = "#fff";
-    textarea.style.fontFamily = "monospace";
-    textarea.style.resize = "vertical";
-    boiteEdition.append(textarea);
-    
-    const btnConteneur = document.createElement("div");
-    btnConteneur.style.display = "flex";
-    btnConteneur.style.gap = "10px";
-    
-    const btnValider = document.createElement("button");
-    btnValider.textContent = "Valider et régénérer";
-    btnValider.style.padding = "10px 16px";
-    btnValider.style.background = "#00d4ff";
-    btnValider.style.color = "#000";
-    btnValider.style.border = "none";
-    btnValider.style.borderRadius = "4px";
-    btnValider.style.cursor = "pointer";
-    btnValider.style.fontWeight = "bold";
-    
-    const btnAnnuler = document.createElement("button");
-    btnAnnuler.textContent = "Annuler";
-    btnAnnuler.style.padding = "10px 16px";
-    btnAnnuler.style.background = "#4a5568";
-    btnAnnuler.style.color = "#fff";
-    btnAnnuler.style.border = "none";
-    btnAnnuler.style.borderRadius = "4px";
-    btnAnnuler.style.cursor = "pointer";
-    
-    const overlay = document.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.top = "0";
-    overlay.style.left = "0";
-    overlay.style.right = "0";
-    overlay.style.bottom = "0";
-    overlay.style.background = "rgba(0,0,0,0.7)";
-    overlay.style.zIndex = "9998";
-    
-    const fermer = () => {
-        boiteEdition.remove();
-        overlay.remove();
-    };
-    
-    btnAnnuler.addEventListener("click", fermer);
-    overlay.addEventListener("click", fermer);
-    textarea.focus();
-    textarea.select();
-    
-    btnValider.addEventListener("click", async () => {
-        const nouveauTexte = textarea.value.trim();
-        if (nouveauTexte && nouveauTexte !== contenuOriginal) {
-            fermer();
-            // Modifier le message original
-            const paragraphe = articleOriginal.querySelector("p");
-            if (paragraphe) paragraphe.textContent = nouveauTexte;
-            
-            // Trouver et supprimer la réponse suivante
-            let nextElement = conteneurMessage.nextElementSibling;
-            if (nextElement && nextElement.classList && nextElement.classList.contains("message-assistant")) {
-                nextElement.remove();
-            }
-            
-            // Régénérer la réponse
-            await envoyerMessageEtModifier(nouveauTexte);
-        } else {
-            fermer();
-        }
-    });
-    
-    btnConteneur.append(btnValider, btnAnnuler);
-    boiteEdition.append(btnConteneur);
-    
-    document.body.append(overlay, boiteEdition);
-}
-
-// Fonction pour envoyer un message modifié
-async function envoyerMessageEtModifier(nouveauMessage) {
-    enCoursDeReponse = true;
-    setInputDisabled(true);
-    
-    const articleAssistant = creerMessageAssistantVide();
-    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
-    
-    if (paragraphe) paragraphe.textContent = "...";
-    
-    try {
-        console.log('[FRONTEND] Régénération avec message modifié:', nouveauMessage.slice(0, 50));
-        const response = await fetch(`${API_BASE}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: nouveauMessage, conversationId }),
-        });
-        console.log('[FRONTEND] Réponse reçue, status:', response.status);
-
-        if (!response.ok) {
-            throw new Error(`Erreur serveur: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullReply = '';
-        let buffer = '';
-        let chunkCount = 0;
-
-        if (paragraphe) paragraphe.textContent = "";
-        console.log('[FRONTEND] Début de la lecture du stream');
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                console.log('[FRONTEND] Stream terminé, chunks reçus:', chunkCount);
-                break;
-            }
-            chunkCount++;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const data = line.slice(6);
-
-                if (data === '[DONE]') continue;
-
-                // Extraire les meta (conversationId)
-                try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.type === 'meta' && parsed.conversationId) {
-                        setConversationId(parsed.conversationId);
-                        continue;
-                    }
-                } catch {
-                    // pas du JSON, c'est du texte
-                }
-
-                // Texte de la reponse
-                const texte = data.replace(/\\n/g, '\n');
-                fullReply += texte;
-
-                if (paragraphe) {
-                    paragraphe.textContent = fullReply;
-                    articleAssistant.scrollIntoView({ behavior: "smooth", block: "end" });
-                }
-            }
-        }
-
-        if (!fullReply && paragraphe) {
-            paragraphe.textContent = "(Pas de reponse du serveur)";
-        }
-
-        afficherStatut("Réponse régénérée.");
-        chargerHistorique();
-    } catch (err) {
-        console.error('Erreur chat:', err);
-        if (paragraphe) {
-            paragraphe.textContent = `Erreur : ${err.message}`;
-        }
-        afficherStatut("Erreur lors de la régénération");
-    } finally {
-        enCoursDeReponse = false;
-        setInputDisabled(false);
-    }
-}
-
+/**
+ * Cree un message assistant vide (placeholder) dans le fil de conversation.
+ * Utilise pendant le streaming de la reponse.
+ *
+ * @returns {HTMLElement|null} L'element <article> cree.
+ */
 function creerMessageAssistantVide() {
     if (!filConversation) return null;
-    
+
     const conteneurMessage = document.createElement("div");
-    conteneurMessage.style.display = "flex";
-    conteneurMessage.style.flexDirection = "column";
-    conteneurMessage.style.marginBottom = "12px";
-    conteneurMessage.style.alignItems = "flex-start";
+    conteneurMessage.style.cssText = "display:flex;flex-direction:column;margin-bottom:12px;align-items:flex-start";
 
     const article = document.createElement("article");
     article.className = "message message-assistant";
     const paragraphe = document.createElement("p");
     paragraphe.textContent = "";
     article.append(paragraphe);
-    
     conteneurMessage.append(article);
 
-    // Ajouter les actions en dessous
-    const barreActions = document.createElement("div");
-    barreActions.style.display = "flex";
-    barreActions.style.gap = "10px";
-    barreActions.style.marginTop = "6px";
-    barreActions.style.opacity = "0";
-    barreActions.style.transition = "opacity 0.2s ease";
-    barreActions.style.pointerEvents = "none";
-
-    // Bouton copier
-    const btnCopier = document.createElement("button");
-    btnCopier.textContent = "copy";
-    btnCopier.title = "Copier";
-    btnCopier.style.padding = "4px 8px";
-    btnCopier.style.background = "transparent";
-    btnCopier.style.border = "none";
-    btnCopier.style.color = "#888";
-    btnCopier.style.cursor = "pointer";
-    btnCopier.style.fontSize = "11px";
-    btnCopier.style.transition = "color 0.2s ease";
-    btnCopier.style.fontWeight = "500";
-
-    btnCopier.addEventListener("mouseenter", () => {
-        btnCopier.style.color = "#aaa";
+    // Barre d'actions (copier uniquement)
+    const barreActions = creerBarreActions();
+    const btnCopier = creerBoutonAction("copy", "Copier", () => {
+        navigator.clipboard.writeText(paragraphe.textContent)
+            .then(() => afficherStatut("Copie!"))
+            .catch(() => afficherStatut("Erreur lors de la copie"));
     });
-
-    btnCopier.addEventListener("mouseleave", () => {
-        btnCopier.style.color = "#888";
-    });
-
-    btnCopier.addEventListener("click", () => {
-        navigator.clipboard.writeText(paragraphe.textContent).then(() => {
-            afficherStatut("Copié!");
-        }).catch(() => {
-            afficherStatut("Erreur lors de la copie");
-        });
-    });
-
     barreActions.append(btnCopier);
     conteneurMessage.append(barreActions);
-
-    // Afficher/masquer les actions au hover
-    conteneurMessage.addEventListener("mouseenter", () => {
-        barreActions.style.opacity = "1";
-        barreActions.style.pointerEvents = "auto";
-    });
-
-    conteneurMessage.addEventListener("mouseleave", () => {
-        barreActions.style.opacity = "0";
-        barreActions.style.pointerEvents = "none";
-    });
+    attacherHoverActions(conteneurMessage, barreActions);
 
     filConversation.append(conteneurMessage);
     return article;
 }
 
+/* ============================================================
+   EDITION DE MESSAGE
+   ============================================================ */
+
+/**
+ * Ouvre une modale d'edition pour un message utilisateur.
+ * Si le texte est modifie, regenere la reponse de l'assistant.
+ *
+ * @param {string}      contenuOriginal  - Texte actuel du message.
+ * @param {HTMLElement}  articleOriginal  - Element <article> du message.
+ * @param {HTMLElement}  conteneurMessage - Conteneur parent du message.
+ */
+function editerMessage(contenuOriginal, articleOriginal, conteneurMessage) {
+    // Overlay semi-transparent
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9998";
+
+    // Boite d'edition
+    const boiteEdition = document.createElement("div");
+    boiteEdition.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a2e;border:2px solid #4a7c9e;border-radius:8px;padding:20px;z-index:9999;min-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.5);color:#fff";
+
+    const titre = document.createElement("h3");
+    titre.textContent = "Editer le message";
+    titre.style.marginTop = "0";
+    boiteEdition.append(titre);
+
+    const textarea = document.createElement("textarea");
+    textarea.value = contenuOriginal;
+    textarea.style.cssText = "width:100%;height:120px;padding:10px;margin-bottom:12px;border-radius:4px;border:1px solid #4a7c9e;background:#0f3460;color:#fff;font-family:monospace;resize:vertical";
+    boiteEdition.append(textarea);
+
+    const btnConteneur = document.createElement("div");
+    btnConteneur.style.cssText = "display:flex;gap:10px";
+
+    const btnValider = document.createElement("button");
+    btnValider.textContent = "Valider et regenerer";
+    btnValider.style.cssText = "padding:10px 16px;background:#00d4ff;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold";
+
+    const btnAnnuler = document.createElement("button");
+    btnAnnuler.textContent = "Annuler";
+    btnAnnuler.style.cssText = "padding:10px 16px;background:#4a5568;color:#fff;border:none;border-radius:4px;cursor:pointer";
+
+    /** Ferme la modale d'edition. */
+    const fermer = () => {
+        boiteEdition.remove();
+        overlay.remove();
+    };
+
+    btnAnnuler.addEventListener("click", fermer);
+    overlay.addEventListener("click", fermer);
+
+    btnValider.addEventListener("click", async () => {
+        const nouveauTexte = textarea.value.trim();
+        if (nouveauTexte && nouveauTexte !== contenuOriginal) {
+            fermer();
+            // Mettre a jour le message dans le DOM
+            const paragraphe = articleOriginal.querySelector("p");
+            if (paragraphe) paragraphe.textContent = nouveauTexte;
+
+            // Supprimer la reponse assistant suivante si elle existe
+            const nextElement = conteneurMessage.nextElementSibling;
+            if (nextElement) {
+                const articleSuivant = nextElement.querySelector(".message-assistant");
+                if (articleSuivant) nextElement.remove();
+            }
+
+            // Regenerer la reponse avec le message modifie
+            await envoyerEtStreamer(nouveauTexte, "Reponse regeneree.");
+        } else {
+            fermer();
+        }
+    });
+
+    btnConteneur.append(btnValider, btnAnnuler);
+    boiteEdition.append(btnConteneur);
+    document.body.append(overlay, boiteEdition);
+
+    textarea.focus();
+    textarea.select();
+}
+
+/* ============================================================
+   COMMUNICATION AVEC LE BACKEND (streaming SSE)
+   ============================================================ */
+
+/**
+ * Lit un flux SSE depuis la reponse fetch et alimente progressivement
+ * le paragraphe du message assistant.
+ *
+ * @param {Response}    response         - Reponse fetch (stream SSE).
+ * @param {HTMLElement} articleAssistant  - Element <article> a remplir.
+ * @returns {Promise<string>} Texte complet de la reponse.
+ */
+async function lireStreamSSE(response, articleAssistant) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
+    let fullReply = '';
+    let buffer = '';
+
+    if (paragraphe) paragraphe.textContent = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+
+            if (data === '[DONE]') continue;
+
+            // Extraire les meta (conversationId)
+            try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === 'meta' && parsed.conversationId) {
+                    setConversationId(parsed.conversationId);
+                    continue;
+                }
+            } catch {
+                // pas du JSON, c'est du texte brut
+            }
+
+            // Accumuler le texte de la reponse
+            const texte = data.replace(/\\n/g, '\n');
+            fullReply += texte;
+
+            if (paragraphe) {
+                paragraphe.textContent = fullReply;
+                articleAssistant.scrollIntoView({ behavior: "smooth", block: "end" });
+            }
+        }
+    }
+
+    return fullReply;
+}
+
+/**
+ * Envoie un message au backend et affiche la reponse en streaming.
+ * Fonction partagee par l'envoi normal et la regeneration apres edition.
+ *
+ * @param {string} message       - Message a envoyer au LLM.
+ * @param {string} statutSucces  - Message de statut a afficher en cas de succes.
+ */
+async function envoyerEtStreamer(message, statutSucces) {
+    enCoursDeReponse = true;
+    setInputDisabled(true);
+
+    const articleAssistant = creerMessageAssistantVide();
+    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
+    if (paragraphe) paragraphe.textContent = "...";
+
+    try {
+        const response = await fetch(`${API_BASE}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, conversationId }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erreur serveur: ${response.status}`);
+        }
+
+        const fullReply = await lireStreamSSE(response, articleAssistant);
+
+        if (!fullReply && paragraphe) {
+            paragraphe.textContent = "(Pas de reponse du serveur)";
+        }
+
+        afficherStatut(statutSucces);
+        chargerHistorique();
+    } catch (err) {
+        if (window.Logger) Logger.error('Erreur chat: ' + err.message, 'app.js');
+        if (paragraphe) {
+            paragraphe.textContent = `Erreur : ${err.message}. Verifiez que le serveur backend est lance.`;
+        }
+        afficherStatut("Erreur de connexion au serveur.");
+    } finally {
+        enCoursDeReponse = false;
+        setInputDisabled(false);
+    }
+}
+
+/**
+ * Gere l'envoi d'un message depuis le champ de saisie actif.
+ * Valide l'input, bascule en mode conversation, puis streame la reponse.
+ */
 async function envoyerMessage() {
     if (enCoursDeReponse) return;
 
@@ -531,6 +578,7 @@ async function envoyerMessage() {
 
     activerModeConversation();
 
+    // Micro-animation du bouton envoyer
     if (boutonActif) boutonActif.style.transform = "scale(0.94)";
     setTimeout(() => {
         if (boutonActif) boutonActif.style.transform = "";
@@ -540,102 +588,19 @@ async function envoyerMessage() {
     synchroniserTousLesChamps("");
     afficherStatut("Message envoye...");
 
-    enCoursDeReponse = true;
-    setInputDisabled(true);
+    await envoyerEtStreamer(valeur, "Reponse recue.");
 
-    const articleAssistant = creerMessageAssistantVide();
-    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
-
-    if (paragraphe) paragraphe.textContent = "...";
-
-    try {
-        console.log('[FRONTEND] Envoi du message:', valeur.slice(0, 50));
-        const response = await fetch(`${API_BASE}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: valeur, conversationId }),
-        });
-        console.log('[FRONTEND] Réponse reçue, status:', response.status);
-
-        if (!response.ok) {
-            throw new Error(`Erreur serveur: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullReply = '';
-        let buffer = '';
-        let chunkCount = 0;
-
-        if (paragraphe) paragraphe.textContent = "";
-        console.log('[FRONTEND] Début de la lecture du stream');
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                console.log('[FRONTEND] Stream terminé, chunks reçus:', chunkCount);
-                break;
-            }
-            chunkCount++;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const data = line.slice(6);
-
-                if (data === '[DONE]') continue;
-
-                // Extraire les meta (conversationId)
-                try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.type === 'meta' && parsed.conversationId) {
-                        setConversationId(parsed.conversationId);
-                        continue;
-                    }
-                } catch {
-                    // pas du JSON, c'est du texte
-                }
-
-                // Texte de la reponse
-                const texte = data.replace(/\\n/g, '\n');
-                fullReply += texte;
-
-                if (paragraphe) {
-                    paragraphe.textContent = fullReply;
-                    articleAssistant.scrollIntoView({ behavior: "smooth", block: "end" });
-                }
-            }
-        }
-
-        if (!fullReply && paragraphe) {
-            paragraphe.textContent = "(Pas de reponse du serveur)";
-        }
-
-        afficherStatut("Reponse recue.");
-        chargerHistorique();
-    } catch (err) {
-        console.error('Erreur chat:', err);
-        if (paragraphe) {
-            paragraphe.textContent = `Erreur : ${err.message}. Verifiez que le serveur backend est lance.`;
-        }
-        afficherStatut("Erreur de connexion au serveur.");
-    } finally {
-        enCoursDeReponse = false;
-        setInputDisabled(false);
-        if (champTexteSecondaire) champTexteSecondaire.focus();
-    }
+    if (champTexteSecondaire) champTexteSecondaire.focus();
 }
 
-function setInputDisabled(disabled) {
-    for (const champ of champsTexte) champ.disabled = disabled;
-    for (const bouton of boutonsEnvoyer) bouton.disabled = disabled;
-}
+/* ============================================================
+   HISTORIQUE DES CONVERSATIONS
+   ============================================================ */
 
-// --- Historique ---
-
+/**
+ * Charge la liste des conversations depuis le backend
+ * et met a jour la sidebar.
+ */
 async function chargerHistorique() {
     if (!listeHistorique) return;
     try {
@@ -647,105 +612,77 @@ async function chargerHistorique() {
         for (const conv of conversations) {
             const btn = document.createElement("button");
             btn.className = "raccourci raccourci-historique";
-            btn.textContent = conv.title;
             btn.dataset.conversationId = conv.id;
-            btn.style.position = "relative";
-            btn.style.display = "flex";
-            btn.style.alignItems = "center";
-            btn.style.justifyContent = "space-between";
-            btn.style.width = "100%";
+            btn.style.cssText = "position:relative;display:flex;align-items:center;justify-content:space-between;width:100%";
 
             if (conv.id === conversationId) {
                 btn.classList.add("est-actif");
             }
 
+            // Texte du titre (tronque)
             const texteBtn = document.createElement("span");
             texteBtn.textContent = conv.title;
-            texteBtn.style.flex = "1";
-            texteBtn.style.textAlign = "left";
-            texteBtn.style.overflow = "hidden";
-            texteBtn.style.textOverflow = "ellipsis";
-            texteBtn.style.whiteSpace = "nowrap";
+            texteBtn.style.cssText = "flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
 
-            // Menu d'actions au hover
+            // Menu d'actions (supprimer) visible au survol
             const menuActions = document.createElement("div");
-            menuActions.style.display = "flex";
-            menuActions.style.gap = "6px";
-            menuActions.style.opacity = "0";
-            menuActions.style.transition = "opacity 0.2s ease";
-            menuActions.style.pointerEvents = "none";
+            menuActions.style.cssText = "display:flex;gap:6px;opacity:0;transition:opacity 0.2s ease;pointer-events:none";
 
-            const btnSupprimer = document.createElement("button");
-            btnSupprimer.textContent = "✕";
-            btnSupprimer.title = "Supprimer";
-            btnSupprimer.style.padding = "4px 6px";
-            btnSupprimer.style.background = "transparent";
-            btnSupprimer.style.border = "none";
-            btnSupprimer.style.color = "#888";
-            btnSupprimer.style.cursor = "pointer";
-            btnSupprimer.style.fontSize = "16px";
-            btnSupprimer.style.lineHeight = "1";
-            btnSupprimer.style.transition = "color 0.2s ease";
-            btnSupprimer.style.minWidth = "24px";
-            btnSupprimer.style.minHeight = "24px";
-            btnSupprimer.style.display = "flex";
-            btnSupprimer.style.alignItems = "center";
-            btnSupprimer.style.justifyContent = "center";
-
-            btnSupprimer.addEventListener("mouseenter", () => {
-                btnSupprimer.style.color = "#ff4444";
-            });
-
-            btnSupprimer.addEventListener("mouseleave", () => {
-                btnSupprimer.style.color = "#888";
-            });
-
-            btnSupprimer.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                if (confirm(`Supprimer la conversation "${conv.title}" ?`)) {
-                    try {
-                        const res = await fetch(`${API_BASE}/api/conversations/${conv.id}`, {
-                            method: 'DELETE',
-                        });
-                        if (res.ok) {
-                            console.log('[FRONTEND] Conversation supprimée:', conv.id);
-                            if (conversationId === conv.id) {
-                                setConversationId(null);
-                                reinitialiserConversation();
-                            }
-                            chargerHistorique();
-                            afficherStatut(`Conversation supprimée`);
-                        }
-                    } catch (err) {
-                        console.error('Erreur suppression:', err);
-                        afficherStatut('Erreur lors de la suppression');
-                    }
-                }
-            });
-
+            const btnSupprimer = creerBoutonSuppressionConversation(conv);
             menuActions.append(btnSupprimer);
 
             btn.append(texteBtn, menuActions);
-
-            btn.addEventListener("mouseenter", () => {
-                menuActions.style.opacity = "1";
-                menuActions.style.pointerEvents = "auto";
-            });
-
-            btn.addEventListener("mouseleave", () => {
-                menuActions.style.opacity = "0";
-                menuActions.style.pointerEvents = "none";
-            });
-
+            attacherHoverActions(btn, menuActions);
             btn.addEventListener("click", () => chargerConversation(conv.id));
-
             listeHistorique.append(btn);
         }
     } catch {
-        // serveur non disponible
+        // Serveur non disponible
     }
 }
 
+/**
+ * Cree le bouton de suppression pour un element d'historique.
+ *
+ * @param {Object} conv - Objet conversation { id, title }.
+ * @returns {HTMLButtonElement}
+ */
+function creerBoutonSuppressionConversation(conv) {
+    const btnSupprimer = document.createElement("button");
+    btnSupprimer.textContent = "\u2715";
+    btnSupprimer.title = "Supprimer";
+    btnSupprimer.style.cssText = "padding:4px 6px;background:transparent;border:none;color:#888;cursor:pointer;font-size:16px;line-height:1;transition:color 0.2s ease;min-width:24px;min-height:24px;display:flex;align-items:center;justify-content:center";
+
+    btnSupprimer.addEventListener("mouseenter", () => { btnSupprimer.style.color = "#ff4444"; });
+    btnSupprimer.addEventListener("mouseleave", () => { btnSupprimer.style.color = "#888"; });
+
+    btnSupprimer.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Supprimer la conversation "${conv.title}" ?`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/conversations/${conv.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                if (conversationId === conv.id) {
+                    setConversationId(null);
+                    reinitialiserConversation();
+                }
+                chargerHistorique();
+                afficherStatut("Conversation supprimee");
+            }
+        } catch (err) {
+            if (window.Logger) Logger.error('Erreur suppression: ' + err.message, 'app.js');
+            afficherStatut("Erreur lors de la suppression");
+        }
+    });
+
+    return btnSupprimer;
+}
+
+/**
+ * Charge et affiche une conversation existante depuis le backend.
+ *
+ * @param {string} id - Identifiant de la conversation a charger.
+ */
 async function chargerConversation(id) {
     try {
         const res = await fetch(`${API_BASE}/api/conversations/${id}`);
@@ -763,14 +700,22 @@ async function chargerConversation(id) {
         activerVue("chat");
         activerModeConversation();
         chargerHistorique();
-        afficherStatut(`Conversation chargee.`);
-    } catch (err) {
+        afficherStatut("Conversation chargee.");
+    } catch {
         afficherStatut("Erreur lors du chargement.");
     }
 }
 
-// --- Effets visuels ---
+/* ============================================================
+   EFFETS VISUELS
+   ============================================================ */
 
+/**
+ * Cree un effet ripple (ondulation) sur un bouton au clic.
+ *
+ * @param {HTMLElement} bouton - Bouton cible.
+ * @param {PointerEvent} event - Evenement pointeur.
+ */
 function creerRipple(bouton, event) {
     const rect = bouton.getBoundingClientRect();
     const ripple = document.createElement("span");
@@ -781,17 +726,22 @@ function creerRipple(bouton, event) {
     setTimeout(() => ripple.remove(), 520);
 }
 
+/* ============================================================
+   EVENEMENTS ET INITIALISATION
+   ============================================================ */
+
+/* --- Ripple sur tous les boutons --- */
 for (const bouton of boutonsInteractifs) {
-    bouton.addEventListener("pointerdown", (event) => {
-        creerRipple(bouton, event);
-    });
+    bouton.addEventListener("pointerdown", (event) => creerRipple(bouton, event));
 }
 
+/* --- Spotlight qui suit le curseur --- */
 window.addEventListener("mousemove", (event) => {
     racine.style.setProperty("--spotlight-x", `${event.clientX}px`);
     racine.style.setProperty("--spotlight-y", `${event.clientY}px`);
 });
 
+/* --- Chargement initial --- */
 window.addEventListener("load", () => {
     setTimeout(() => {
         if (ecranChargement) ecranChargement.classList.add("cache");
@@ -799,22 +749,21 @@ window.addEventListener("load", () => {
         activerVue("chat");
         afficherStatut("Vue active : Chat");
         chargerHistorique();
-        
-        // Charger la conversation actuelle si elle existe
+
+        // Restaurer la conversation active si elle existait
         if (conversationId) {
-            console.log('[FRONTEND] Chargement de la conversation actuelle:', conversationId);
-            chargerConversation(conversationId).then(() => {
-                console.log('[FRONTEND] Conversation actuelle chargée');
-            });
+            chargerConversation(conversationId);
         }
     }, 900);
 });
 
+/* --- Navigation sidebar et boutons --- */
 for (const bouton of boutonsNavigation) {
     bouton.addEventListener("click", () => {
         const cible = bouton.dataset.viewTarget;
         const prompt = bouton.dataset.prompt;
 
+        // "Nouveau chat" sans prompt → reinitialiser
         if (cible === "chat" && bouton.classList.contains("bouton-principal") && !prompt) {
             reinitialiserConversation();
         }
@@ -830,12 +779,12 @@ for (const bouton of boutonsNavigation) {
     });
 }
 
+/* --- Suggestions rapides --- */
 for (const suggestion of suggestions) {
-    suggestion.addEventListener("click", () => {
-        injecterPrompt(suggestion.textContent);
-    });
+    suggestion.addEventListener("click", () => injecterPrompt(suggestion.textContent));
 }
 
+/* --- Cartes d'action (accueil) --- */
 for (const carte of cartesActions) {
     carte.addEventListener("click", () => {
         const cible = carte.dataset.viewTarget;
@@ -844,12 +793,11 @@ for (const carte of cartesActions) {
             activerVue(cible);
             afficherStatut(`Vue active : ${cible}`);
         }
-        if (prompt) {
-            injecterPrompt(prompt);
-        }
+        if (prompt) injecterPrompt(prompt);
     });
 }
 
+/* --- Boutons d'action generiques (partage, piece jointe, voix) --- */
 for (const bouton of boutonsAction) {
     bouton.addEventListener("click", () => {
         const action = bouton.dataset.action;
@@ -859,15 +807,14 @@ for (const bouton of boutonsAction) {
     });
 }
 
+/* --- Envoi de message (boutons + champs texte) --- */
 if (boutonEnvoyer && champTexte) {
     for (const bouton of boutonsEnvoyer) {
         bouton.addEventListener("click", envoyerMessage);
     }
 
     for (const champ of champsTexte) {
-        champ.addEventListener("input", (event) => {
-            synchroniserTousLesChamps(event.target.value);
-        });
+        champ.addEventListener("input", (event) => synchroniserTousLesChamps(event.target.value));
         champ.addEventListener("focus", synchroniserEtatSaisie);
         champ.addEventListener("blur", synchroniserEtatSaisie);
         champ.addEventListener("keydown", (event) => {
@@ -879,4 +826,5 @@ if (boutonEnvoyer && champTexte) {
     }
 }
 
+/* --- Synchronisation initiale --- */
 synchroniserEtatSaisie();

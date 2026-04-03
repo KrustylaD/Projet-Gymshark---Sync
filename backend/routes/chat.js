@@ -1,17 +1,29 @@
 const express = require('express');
 const { generateOllamaResponse, getOllamaHealth } = require('../services/ollama');
 const { getConversation, saveConversation, deleteConversation, listConversations } = require('../services/history');
+const logger = require('../logger');
 
 const router = express.Router();
 
+/** Nombre maximum de tours (paires user/assistant) conserves dans le prompt. */
 const MAX_HISTORY_TURNS = 8;
 
+/* ============================================================
+   FONCTIONS UTILITAIRES
+   ============================================================ */
+
 /**
- * normalizeChunk(chunk): extrait le texte utile d'un fragment reçu depuis Ollama.
+ * Normalise un fragment brut recu depuis Ollama en extrayant
+ * uniquement la partie texte lisible.
+ *
+ * @param {*} chunk - Fragment brut (string, Buffer, JSON...).
+ * @returns {string} Texte extrait, ou chaine vide.
  */
 function normalizeChunk(chunk) {
     let value = String(chunk || '');
     if (value === '') return '';
+
+    // Supprime le prefixe SSE "data:" eventuel
     if (/^\s*data:\s*/.test(value)) value = value.replace(/^\s*data:\s*/, '');
     if (value.trim() === '[DONE]') return '';
 
@@ -28,8 +40,12 @@ function normalizeChunk(chunk) {
 }
 
 /**
- * buildPromptFromHistory(history, userMessage): construit le prompt envoyé
- * au LLM en concaténant l'historique des tours et le message utilisateur.
+ * Construit le prompt envoye au LLM en concatenant l'historique
+ * des tours precedents et le nouveau message utilisateur.
+ *
+ * @param {Array}  history     - Messages precedents { role, content }.
+ * @param {string} userMessage - Dernier message de l'utilisateur.
+ * @returns {string} Prompt formate.
  */
 function buildPromptFromHistory(history, userMessage) {
     const lines = [];
@@ -45,38 +61,64 @@ function buildPromptFromHistory(history, userMessage) {
     return lines.join('\n');
 }
 
+/**
+ * Tronque l'historique pour ne garder que les N derniers tours.
+ *
+ * @param {Array} history - Historique complet des messages.
+ * @returns {Array} Historique tronque.
+ */
 function trimHistory(history) {
     const maxMessages = MAX_HISTORY_TURNS * 2;
     if (history.length <= maxMessages) return history;
     return history.slice(history.length - maxMessages);
 }
 
-// Route principale de chat: reçoit `{ message, conversationId }` et stream la réponse SSE
-router.post('/api/chat', async (req, res) => {
-    const { message, conversationId } = req.body || {};
-    console.log('[CHAT] Message reçu:', message.slice(0, 50));
-    if (!message) return res.status(400).json({ error: 'Missing message' });
-
-    const convId = typeof conversationId === 'string' && conversationId.trim()
-        ? conversationId.trim()
-        : `conv_${Date.now()}`;
-
-    // Charger l'historique depuis le fichier
-    const saved = getConversation(convId);
-    const history = saved ? saved.messages : [];
-    const prompt = buildPromptFromHistory(trimHistory(history), message);
-
-    const envTimeout = Number(process.env.OLLAMA_TIMEOUT);
-    const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
-
+/**
+ * Configure les headers SSE (Server-Sent Events) sur la reponse.
+ *
+ * @param {import('express').Response} res - Objet reponse Express.
+ */
+function setupSSEHeaders(res) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     if (res.flushHeaders) res.flushHeaders();
+}
 
-    // Envoyer l'ID de conversation au client
+/* ============================================================
+   ROUTES API
+   ============================================================ */
+
+/**
+ * POST /api/chat
+ * Route principale de chat. Recoit { message, conversationId }
+ * et streame la reponse du LLM via SSE.
+ */
+router.post('/api/chat', async (req, res) => {
+    const { message, conversationId } = req.body || {};
+    logger.info(`Message recu: ${(message || '').slice(0, 50)}`);
+
+    if (!message) return res.status(400).json({ error: 'Missing message' });
+
+    // Determiner ou creer l'identifiant de conversation
+    const convId = typeof conversationId === 'string' && conversationId.trim()
+        ? conversationId.trim()
+        : `conv_${Date.now()}`;
+
+    // Charger l'historique existant depuis le fichier
+    const saved = getConversation(convId);
+    const history = saved ? saved.messages : [];
+    const prompt = buildPromptFromHistory(trimHistory(history), message);
+
+    // Timeout d'inactivite configurable via variable d'environnement
+    const envTimeout = Number(process.env.OLLAMA_TIMEOUT);
+    const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
+
+    setupSSEHeaders(res);
+
+    // Envoyer l'ID de conversation au client en premier evenement
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
-    console.log('[CHAT] En attente de réponse Ollama...');
+    logger.systemInfo('En attente de reponse Ollama...');
 
     let finished = false;
     let assistantReply = '';
@@ -89,17 +131,17 @@ router.post('/api/chat', async (req, res) => {
                 try {
                     chunkCount++;
                     const normalized = normalizeChunk(chunk);
-                    console.log(`[CHAT] Chunk ${chunkCount}:`, JSON.stringify(normalized).slice(0, 50));
                     if (!normalized) return;
                     assistantReply += normalized;
+                    // Echappe les retours a la ligne pour le format SSE
                     const safe = normalized.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
-                    console.error('[CHAT] Erreur chunk:', e.message);
+                    logger.warn(`Erreur chunk: ${e.message}`, 'routes/chat.js');
                 }
             },
         });
-        console.log('[CHAT] Réponse Ollama reçue, chunks:', chunkCount);
+        logger.systemInfo(`Reponse Ollama recue, chunks: ${chunkCount}`);
 
         if (!finished) {
             res.write('data: [DONE]\n\n');
@@ -116,7 +158,7 @@ router.post('/api/chat', async (req, res) => {
 
         res.end();
     } catch (err) {
-        console.error('Error in /api/chat:', err);
+        logger.fatal(`Error in /api/chat: ${err.message || err}`, 'routes/chat.js');
         if (!finished) {
             const msg = err && err.message ? err.message : 'LLM error';
             res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
@@ -130,59 +172,74 @@ router.post('/api/chat', async (req, res) => {
     }
 });
 
-// Lister toutes les conversations
+/**
+ * GET /api/conversations
+ * Retourne la liste de toutes les conversations (sans les messages),
+ * triees par date de mise a jour decroissante.
+ */
 router.get('/api/conversations', (req, res) => {
     res.json(listConversations());
 });
 
-// Récupérer une conversation par ID
+/**
+ * GET /api/conversations/:id
+ * Retourne une conversation complete (avec messages) par son ID.
+ */
 router.get('/api/conversations/:id', (req, res) => {
     const conv = getConversation(req.params.id);
     if (!conv) return res.status(404).json({ error: 'Not found' });
     res.json(conv);
 });
 
-// Supprimer une conversation
+/**
+ * DELETE /api/conversations/:id
+ * Supprime une conversation par son ID.
+ */
 router.delete('/api/conversations/:id', (req, res) => {
     const deleted = deleteConversation(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
 });
 
-// Route de health check du LLM
+/**
+ * GET /api/llm/health
+ * Health check du serveur Ollama. Retourne 200 si OK, 503 sinon.
+ */
 router.get('/api/llm/health', async (req, res) => {
     const health = await getOllamaHealth({ timeoutMs: 5000 });
     if (!health.ok) {
+        logger.warn(`Ollama health check failed: ${health.error || 'unknown'}`, 'routes/chat.js');
         return res.status(503).json(health);
     }
+    logger.systemInfo('Ollama health check OK');
     return res.status(200).json(health);
 });
 
-// Route de test streaming
+/**
+ * GET /api/test-stream
+ * Route de test pour verifier que le streaming SSE fonctionne
+ * avec un prompt simple.
+ */
 router.get('/api/test-stream', async (req, res) => {
-    console.log('[TEST] Début du test streaming');
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    if (res.flushHeaders) res.flushHeaders();
+    logger.systemInfo('Debut du test streaming');
+    setupSSEHeaders(res);
 
     let chunkCount = 0;
     const prompt = "Say hello in 5 words";
-    
+
     try {
         await generateOllamaResponse(prompt, {
             timeoutMs: 15000,
             onChunk: (chunk) => {
                 chunkCount++;
-                console.log(`[TEST] Chunk ${chunkCount}:`, JSON.stringify(chunk).slice(0, 50));
                 res.write(`data: ${chunk}\n\n`);
             },
         });
-        console.log('[TEST] Streaming complete, totalzchunks:', chunkCount);
+        logger.systemInfo(`Streaming complete, totalChunks: ${chunkCount}`);
         res.write('data: [DONE]\n\n');
         res.end();
     } catch (err) {
-        console.error('[TEST] Error:', err.message);
+        logger.fatal(`Test streaming error: ${err.message}`, 'routes/chat.js');
         res.write(`data: ERROR: ${err.message}\n\n`);
         res.end();
     }
