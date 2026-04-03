@@ -3,3 +3,4 @@ node_modules
 data/conversations.json
 conversations.json
 data/conversations.json
+/data/*.json
