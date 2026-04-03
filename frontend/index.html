@@ -23,6 +23,10 @@
         </div>
     </div>
 
+    <div class="transition-page" aria-hidden="true">
+        <span class="transition-page-lueur"></span>
+    </div>
+
     <div class="grille-fond" aria-hidden="true"></div>
     <div class="halo halo-1" aria-hidden="true"></div>
     <div class="halo halo-2" aria-hidden="true"></div>
@@ -72,11 +76,11 @@
             </section>
 
             <div class="zone-aide">
-                <button class="aide-bouton" data-view-target="help">
+                <button class="aide-bouton" data-action="audio-settings" type="button">
                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M12 3.5C7.3 3.5 3.5 7.3 3.5 12C3.5 16.7 7.3 20.5 12 20.5C16.7 20.5 20.5 16.7 20.5 12C20.5 7.3 16.7 3.5 12 3.5ZM12 19C8.1 19 5 15.9 5 12C5 8.1 8.1 5 12 5C15.9 5 19 8.1 19 12C19 15.9 15.9 19 12 19ZM11.2 16H12.8V17.6H11.2V16Z"></path>
                     </svg>
-                    <span>Centre d'aide</span>
+                    <span>Paramètres audio</span>
                 </button>
 
                 <button class="aide-bouton" data-view-target="docs">
@@ -98,7 +102,7 @@
                             <path d="M12 4L16 8H13V14H11V8H8L12 4ZM6 14V18H18V14H20V20H4V14H6Z"></path>
                         </svg>
                     </button>
-                    <button class="action-top" aria-label="Profil" data-view-target="help">
+                    <button class="action-top" aria-label="Paramètres audio" data-action="audio-settings" type="button">
                         <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                             <path d="M12 12C9.9 12 8.2 10.3 8.2 8.2C8.2 6.1 9.9 4.4 12 4.4C14.1 4.4 15.8 6.1 15.8 8.2C15.8 10.3 14.1 12 12 12ZM12 13.9C15.3 13.9 18 15.8 18 18.2V19.6H6V18.2C6 15.8 8.7 13.9 12 13.9Z"></path>
                         </svg>
@@ -286,6 +290,58 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <div class="modale-overlay modale-overlay-audio" id="modale-audio" hidden>
+        <div class="modale-confirmation modale-audio" role="dialog" aria-modal="true" aria-labelledby="modale-audio-titre">
+            <div class="modale-audio-entete">
+                <div>
+                    <h3 id="modale-audio-titre">Paramètres audio</h3>
+                    <p>Vérifiez le bon micro et testez la sortie audio avant la saisie vocale.</p>
+                </div>
+                <button class="modale-audio-fermer" id="bouton-fermer-modale-audio" type="button" aria-label="Fermer les paramètres audio">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="liste-elements panneau-audio">
+                <article class="element-liste statique carte-diagnostic-audio">
+                    <strong>Microphone</strong>
+                    <span>Sélectionnez l'entrée à utiliser pour la saisie vocale.</span>
+                    <label class="champ-diagnostic">
+                        <span>Entrée audio détectée</span>
+                        <select class="select-audio" id="select-audio-input">
+                            <option value="">Chargement des périphériques...</option>
+                        </select>
+                    </label>
+                    <div class="actions-diagnostic-audio">
+                        <button class="bouton-diagnostic-audio" id="bouton-actualiser-audio" type="button">Actualiser les micros</button>
+                        <button class="bouton-diagnostic-audio bouton-diagnostic-principal" id="bouton-test-micro" type="button">Tester le micro</button>
+                    </div>
+                    <div class="indicateur-audio" aria-hidden="true">
+                        <div class="barre-audio-fond">
+                            <div class="barre-audio-niveau" id="barre-audio-niveau"></div>
+                        </div>
+                        <span class="texte-audio-niveau" id="texte-audio-niveau">Niveau micro : 0%</span>
+                    </div>
+                    <span class="statut-diagnostic-audio" id="statut-micro-audio">Aucun test micro en cours.</span>
+                </article>
+
+                <article class="element-liste statique carte-diagnostic-audio">
+                    <strong>Sortie audio</strong>
+                    <span>Jouez un son test pour vérifier si le son sort bien sur vos haut-parleurs ou votre casque.</span>
+                    <div class="actions-diagnostic-audio">
+                        <button class="bouton-diagnostic-audio bouton-diagnostic-principal" id="bouton-test-haut-parleur" type="button">Jouer un son test</button>
+                    </div>
+                    <div class="indicateur-audio" aria-hidden="true">
+                        <div class="barre-audio-fond">
+                            <div class="barre-audio-niveau barre-audio-sortie" id="barre-audio-sortie"></div>
+                        </div>
+                        <span class="texte-audio-niveau" id="texte-audio-sortie">Sortie audio : inactive</span>
+                    </div>
+                    <span class="statut-diagnostic-audio" id="statut-sortie-audio">Cliquez sur le bouton pour lancer un son test.</span>
+                </article>
+            </div>
+        </div>
     </div>
 
     <script src="logger.client.js"></script>

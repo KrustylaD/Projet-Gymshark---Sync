@@ -1,793 +1,605 @@
 /* ============================================================
-   GYMSHARK SYNC — APPLICATION FRONTEND
-   Gere l'interface de chat, la navigation entre vues,
-   l'historique des conversations et les effets visuels.
+   GYMSHARK SYNC - FRONTEND
+   Chat, history, modals, audio diagnostics and voice input.
    ============================================================ */
+
+'use strict';
 
 const API_BASE = 'http://localhost:3000';
-
-/* ============================================================
-   REFERENCES DOM
-   ============================================================ */
-
-const racine = document.documentElement;
-const body = document.body;
-const ecranChargement = document.querySelector(".ecran-chargement");
-const vues = document.querySelectorAll(".vue");
-const vueChat = document.querySelector('.vue[data-view="chat"]');
-const boutonsNavigation = document.querySelectorAll("[data-view-target]");
-const boutonsInteractifs = document.querySelectorAll("button");
-
-/* --- Champs de saisie --- */
-const champsTexte = document.querySelectorAll(".champ-texte");
-const champTexte = document.querySelector(".champ-texte");
-const champTexteSecondaire = document.querySelector(".champ-texte-secondaire");
-const boutonsEnvoyer = document.querySelectorAll(".bouton-envoyer");
-const boutonEnvoyer = document.querySelector(".bouton-envoyer");
-const boutonEnvoyerSecondaire = document.querySelector(".bouton-envoyer-secondaire");
-const boutonsMicro = document.querySelectorAll(".bouton-micro");
-const boiteSaisie = document.querySelector(".boite-saisie");
-const boiteSaisieSecondaire = document.querySelector(".boite-saisie-secondaire");
-
-/* --- Elements de contenu --- */
-const suggestions = document.querySelectorAll(".suggestion");
-const cartesActions = document.querySelectorAll(".carte-action");
-const filConversation = document.querySelector(".fil-conversation");
-const zoneStatut = document.querySelector(".zone-statut");
-const boutonsAction = document.querySelectorAll("[data-action]");
-const listeHistorique = document.querySelector(".liste-historique");
-
-/** Contenu initial du fil de conversation (pour le reset). */
-const messageInitial = filConversation ? filConversation.innerHTML : "";
-
-/* ============================================================
-   ETAT DE L'APPLICATION
-   ============================================================ */
-
-let timeoutStatut = null;
-let conversationId = localStorage.getItem('currentConversationId') || null;
-let enCoursDeReponse = false;
-const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-let reconnaissanceVocale = null;
-let ecouteVocaleActive = false;
-let champVocalActif = null;
-let baseTranscriptionVocale = "";
-let transcriptFinal = "";
 const STORAGE_KEYS = {
-    snapshot: "chatConversationSnapshot",
-    draft: "chatDraftMessage",
+    conversationId: 'currentConversationId',
+    snapshot: 'chatConversationSnapshot',
+    draft: 'chatDraftMessage',
 };
 
-/* ============================================================
-   ANIMATIONS D'ENTREE (IntersectionObserver)
-   ============================================================ */
+const dom = {
+    root: document.documentElement,
+    body: document.body,
+    loadingScreen: document.querySelector('.ecran-chargement'),
+    pageTransition: document.querySelector('.transition-page'),
+    sidebar: document.querySelector('.barre-laterale'),
+    contentPanel: document.querySelector('.contenu-principal'),
+    views: document.querySelectorAll('.vue'),
+    chatView: document.querySelector('.vue[data-view="chat"]'),
+    navButtons: document.querySelectorAll('[data-view-target]'),
+    interactiveButtons: document.querySelectorAll('button'),
+    textInputs: document.querySelectorAll('.champ-texte'),
+    primaryInput: document.querySelector('.champ-texte'),
+    secondaryInput: document.querySelector('.champ-texte-secondaire'),
+    sendButtons: document.querySelectorAll('.bouton-envoyer'),
+    primarySendButton: document.querySelector('.bouton-envoyer'),
+    secondarySendButton: document.querySelector('.bouton-envoyer-secondaire'),
+    micButtons: document.querySelectorAll('.bouton-micro'),
+    inputBoxes: document.querySelectorAll('.boite-saisie'),
+    primaryInputBox: document.querySelector('.boite-saisie'),
+    secondaryInputBox: document.querySelector('.boite-saisie-secondaire'),
+    suggestions: document.querySelectorAll('.suggestion'),
+    actionCards: document.querySelectorAll('.carte-action'),
+    conversationFeed: document.querySelector('.fil-conversation'),
+    statusZone: document.querySelector('.zone-statut'),
+    actionButtons: document.querySelectorAll('[data-action]'),
+    historyList: document.querySelector('.liste-historique'),
+    audioModal: document.querySelector('#modale-audio'),
+    closeAudioModalButton: document.querySelector('#bouton-fermer-modale-audio'),
+    audioInputSelect: document.querySelector('#select-audio-input'),
+    refreshAudioButton: document.querySelector('#bouton-actualiser-audio'),
+    testMicButton: document.querySelector('#bouton-test-micro'),
+    testSpeakerButton: document.querySelector('#bouton-test-haut-parleur'),
+    micLevelBar: document.querySelector('#barre-audio-niveau'),
+    micLevelText: document.querySelector('#texte-audio-niveau'),
+    micStatus: document.querySelector('#statut-micro-audio'),
+    speakerLevelBar: document.querySelector('#barre-audio-sortie'),
+    speakerLevelText: document.querySelector('#texte-audio-sortie'),
+    speakerStatus: document.querySelector('#statut-sortie-audio'),
+};
 
-const elementsAnimables = document.querySelectorAll(
-    ".logo, .bouton-lateral, .section-salutation, .boite-saisie, .suggestion, .carte, .zone-aide .aide-bouton, .entete, .element-liste, .message"
-);
+const initialConversationMarkup = dom.conversationFeed ? dom.conversationFeed.innerHTML : '';
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-for (const [index, element] of elementsAnimables.entries()) {
-    element.classList.add("animable");
-    element.style.transitionDelay = `${Math.min(index * 36, 240)}ms`;
-}
+const state = {
+    statusTimer: null,
+    conversationId: localStorage.getItem(STORAGE_KEYS.conversationId) || null,
+    isResponding: false,
+    audioModalOpen: false,
+    speechRecognition: null,
+    speechActive: false,
+    speechShouldRestart: false,
+    speechErrored: false,
+    speechInput: null,
+    speechBaseText: '',
+    speechFinalText: '',
+    micTestActive: false,
+    micStream: null,
+    micContext: null,
+    micAnalyser: null,
+    micSource: null,
+    micFrame: null,
+    selectedAudioInputId: '',
+    speakerContext: null,
+    lastFocusedElement: null,
+    activeView: document.querySelector('.vue.vue-active')?.dataset.view || 'chat',
+    viewSwitchTimer: null,
+};
 
-const observateur = new IntersectionObserver(
-    (entrees) => {
-        for (const entree of entrees) {
-            if (entree.isIntersecting) {
-                entree.target.classList.add("est-visible");
-                observateur.unobserve(entree.target);
-            }
-        }
-    },
-    { threshold: 0.1, rootMargin: "0px 0px -6% 0px" }
-);
-
-for (const element of elementsAnimables) {
-    observateur.observe(element);
-}
-
-/* ============================================================
-   GESTION DU CONVERSATION ID
-   ============================================================ */
-
-/**
- * Met a jour l'identifiant de conversation actif
- * et le persiste dans le localStorage.
- *
- * @param {string|null} id - Nouvel identifiant, ou null pour reinitialiser.
- */
-function setConversationId(id) {
-    conversationId = id;
-    if (id) {
-        localStorage.setItem('currentConversationId', id);
-    } else {
-        localStorage.removeItem('currentConversationId');
+function storageGet(key, fallback = null) {
+    try {
+        return sessionStorage.getItem(key) ?? fallback;
+    } catch {
+        return fallback;
     }
-    sauvegarderSnapshotConversation();
 }
 
-/* ============================================================
-   BARRE DE STATUT
-   ============================================================ */
+function storageSet(key, value) {
+    try {
+        sessionStorage.setItem(key, value);
+    } catch {
+        // Ignore storage failures.
+    }
+}
 
-/**
- * Affiche un message temporaire dans la zone de statut.
- *
- * @param {string} message - Texte a afficher.
- */
-function afficherStatut(message) {
-    if (!zoneStatut) return;
-    zoneStatut.textContent = message;
-    zoneStatut.classList.add("est-visible");
-    if (timeoutStatut) clearTimeout(timeoutStatut);
-    timeoutStatut = setTimeout(() => {
-        zoneStatut.classList.remove("est-visible");
+function storageRemove(key) {
+    try {
+        sessionStorage.removeItem(key);
+    } catch {
+        // Ignore storage failures.
+    }
+}
+
+function setConversationId(id) {
+    state.conversationId = id;
+    if (id) {
+        localStorage.setItem(STORAGE_KEYS.conversationId, id);
+    } else {
+        localStorage.removeItem(STORAGE_KEYS.conversationId);
+    }
+    saveConversationSnapshot();
+}
+
+function showStatus(message) {
+    if (!dom.statusZone) return;
+    dom.statusZone.textContent = message;
+    dom.statusZone.classList.add('est-visible');
+    if (state.statusTimer) clearTimeout(state.statusTimer);
+    state.statusTimer = setTimeout(() => {
+        dom.statusZone.classList.remove('est-visible');
     }, 2200);
 }
 
-/* ============================================================
-   NAVIGATION ENTRE VUES
-   ============================================================ */
+function setDiagnosticStatus(element, message) {
+    if (element) element.textContent = message;
+}
 
-/**
- * Active une vue par son nom et met a jour l'etat actif des boutons.
- *
- * @param {string} nomVue - Nom de la vue (chat, search, shortcuts, help, docs).
- */
-function activerVue(nomVue) {
-    for (const vue of vues) {
-        vue.classList.toggle("vue-active", vue.dataset.view === nomVue);
-    }
-    for (const bouton of boutonsNavigation) {
-        bouton.classList.toggle("est-actif", bouton.dataset.viewTarget === nomVue);
+function syncActiveNav(viewName) {
+    for (const button of dom.navButtons) {
+        button.classList.toggle('est-actif', button.dataset.viewTarget === viewName);
     }
 }
 
-/**
- * Bascule l'interface en mode conversation
- * (masque l'accueil, affiche le fil et la barre fixe).
- */
-function activerModeConversation() {
-    if (vueChat) vueChat.classList.add("est-en-conversation");
+function pulsePageTransition() {
+    if (!dom.pageTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    dom.pageTransition.classList.remove('est-active');
+    void dom.pageTransition.offsetWidth;
+    dom.pageTransition.classList.add('est-active');
+    setTimeout(() => dom.pageTransition?.classList.remove('est-active'), 720);
 }
 
-/**
- * Reinitialise l'interface a l'etat d'accueil du chat.
- */
-function reinitialiserConversation() {
-    if (vueChat) vueChat.classList.remove("est-en-conversation");
-    if (filConversation) filConversation.innerHTML = messageInitial;
-    synchroniserTousLesChamps("");
-    setConversationId(null);
-    effacerSnapshotConversation();
+function getViewMotionTargets(view) {
+    if (!view) return [];
+
+    const selectors = [
+        ':scope > .chat-accueil > *',
+        ':scope > .section-saisie',
+        ':scope > .fil-conversation > *',
+        ':scope > .barre-saisie-fixe',
+        ':scope > .vue-entete',
+        ':scope > .liste-elements > *',
+        ':scope > .grille-raccourcis > *',
+        ':scope > .conteneur-cartes > *',
+    ];
+
+    const uniqueTargets = [];
+    const seen = new Set();
+
+    for (const selector of selectors) {
+        for (const element of view.querySelectorAll(selector)) {
+            if (!seen.has(element)) {
+                uniqueTargets.push(element);
+                seen.add(element);
+            }
+        }
+    }
+
+    return uniqueTargets.slice(0, 14);
 }
 
-/* ============================================================
-   GESTION DES CHAMPS DE SAISIE
-   ============================================================ */
+function animateViewEntrance(view) {
+    if (!view || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-/**
- * Joue une micro-animation de mise en avant sur une boite de saisie.
- *
- * @param {HTMLElement} [boite=boiteSaisie] - Element a animer.
- */
-function mettreEnAvantChamp(boite = boiteSaisie) {
-    if (!boite) return;
-    boite.animate(
+    const targets = getViewMotionTargets(view);
+    for (const [index, element] of targets.entries()) {
+        element.animate(
+            [
+                {
+                    opacity: 0,
+                    transform: 'translateY(22px) scale(0.985)',
+                    filter: 'blur(10px)',
+                },
+                {
+                    opacity: 1,
+                    transform: 'translateY(0) scale(1)',
+                    filter: 'blur(0)',
+                },
+            ],
+            {
+                duration: 640,
+                delay: Math.min(index * 42, 220),
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'both',
+            }
+        );
+    }
+}
+
+function activateView(viewName, { immediate = false } = {}) {
+    const nextView = Array.from(dom.views).find((view) => view.dataset.view === viewName);
+    if (!nextView) return;
+
+    const currentView = Array.from(dom.views).find((view) => view.classList.contains('vue-active'));
+    syncActiveNav(viewName);
+
+    if (state.activeView === viewName && currentView === nextView) {
+        return;
+    }
+
+    state.activeView = viewName;
+
+    if (state.viewSwitchTimer) {
+        clearTimeout(state.viewSwitchTimer);
+        state.viewSwitchTimer = null;
+    }
+
+    if (immediate || !currentView || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        for (const view of dom.views) {
+            view.classList.toggle('vue-active', view === nextView);
+            view.classList.remove('vue-transition-sortie', 'vue-transition-entree');
+        }
+        requestAnimationFrame(() => animateViewEntrance(nextView));
+        return;
+    }
+
+    pulsePageTransition();
+    currentView.classList.add('vue-transition-sortie');
+
+    state.viewSwitchTimer = setTimeout(() => {
+        currentView.classList.remove('vue-active', 'vue-transition-sortie');
+        nextView.classList.add('vue-active', 'vue-transition-entree');
+        requestAnimationFrame(() => animateViewEntrance(nextView));
+        setTimeout(() => nextView.classList.remove('vue-transition-entree'), 520);
+        state.viewSwitchTimer = null;
+    }, 170);
+}
+
+function setConversationMode(enabled) {
+    if (!dom.chatView) return;
+    dom.chatView.classList.toggle('est-en-conversation', enabled);
+}
+
+function getActiveInput() {
+    if (dom.secondaryInput && document.activeElement === dom.secondaryInput) {
+        return dom.secondaryInput;
+    }
+    if (dom.secondaryInput && dom.chatView?.classList.contains('est-en-conversation')) {
+        return dom.secondaryInput;
+    }
+    return dom.primaryInput;
+}
+
+function syncInputBoxesState() {
+    const value = getActiveInput()?.value?.trim() || dom.primaryInput?.value?.trim() || '';
+    if (dom.primaryInputBox && dom.primaryInput) {
+        const active = value.length > 0 || document.activeElement === dom.primaryInput;
+        dom.primaryInputBox.classList.toggle('est-active', active);
+    }
+    if (dom.secondaryInputBox && dom.secondaryInput) {
+        const active = value.length > 0 || document.activeElement === dom.secondaryInput;
+        dom.secondaryInputBox.classList.toggle('est-active', active);
+    }
+}
+
+function saveDraft(value) {
+    if (value && value.trim()) {
+        storageSet(STORAGE_KEYS.draft, value);
+    } else {
+        storageRemove(STORAGE_KEYS.draft);
+    }
+}
+
+function syncAllInputs(value) {
+    for (const input of dom.textInputs) input.value = value;
+    saveDraft(value);
+    syncInputBoxesState();
+}
+
+function pulseInput(box = dom.primaryInputBox) {
+    if (!box) return;
+    box.animate(
         [
-            { transform: "translateY(0) scale(1)" },
-            { transform: "translateY(-1px) scale(1.005)" },
-            { transform: "translateY(0) scale(1)" }
+            { transform: 'translateY(0) scale(1)' },
+            { transform: 'translateY(-1px) scale(1.005)' },
+            { transform: 'translateY(0) scale(1)' },
         ],
-        { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+        { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
     );
 }
 
-/**
- * Retourne le champ de saisie actuellement actif (principal ou secondaire).
- *
- * @returns {HTMLInputElement} Le champ texte avec le focus.
- */
-function obtenirChampActif() {
-    if (champTexteSecondaire && document.activeElement === champTexteSecondaire) {
-        return champTexteSecondaire;
-    }
-    return champTexte;
+function injectPrompt(text) {
+    if (!dom.primaryInput || !text) return;
+    stopSpeechInput(true);
+    syncAllInputs(text);
+    dom.primaryInput.focus();
+    activateView('chat');
+    pulseInput();
+    showStatus(`Prompt chargé : ${text}`);
 }
 
-/**
- * Synchronise la valeur de tous les champs de saisie.
- *
- * @param {string} valeur - Texte a injecter dans tous les champs.
- */
-function synchroniserTousLesChamps(valeur) {
-    for (const champ of champsTexte) champ.value = valeur;
-    sauvegarderBrouillon(valeur);
-    synchroniserEtatSaisie();
+function resetConversation() {
+    stopSpeechInput(true);
+    setConversationMode(false);
+    if (dom.conversationFeed) dom.conversationFeed.innerHTML = initialConversationMarkup;
+    syncAllInputs('');
+    setConversationId(null);
+    clearConversationSnapshot();
 }
 
-/**
- * Met a jour la classe CSS "est-active" des boites de saisie
- * en fonction du contenu et du focus.
- */
-function synchroniserEtatSaisie() {
-    const valeur = obtenirChampActif()?.value?.trim() || champTexte?.value?.trim() || "";
-    if (boiteSaisie && champTexte) {
-        const estActive = valeur.length > 0 || document.activeElement === champTexte;
-        boiteSaisie.classList.toggle("est-active", estActive);
-    }
-    if (boiteSaisieSecondaire && champTexteSecondaire) {
-        const estActive = valeur.length > 0 || document.activeElement === champTexteSecondaire;
-        boiteSaisieSecondaire.classList.toggle("est-active", estActive);
-    }
+function setInputsDisabled(disabled) {
+    for (const input of dom.textInputs) input.disabled = disabled;
+    for (const button of dom.sendButtons) button.disabled = disabled;
 }
 
-/**
- * Injecte un texte pre-defini dans le champ de saisie principal
- * et bascule sur la vue chat.
- *
- * @param {string} texte - Prompt a injecter.
- */
-function injecterPrompt(texte) {
-    if (!champTexte || !texte) return;
-    synchroniserTousLesChamps(texte);
-    champTexte.focus();
-    activerVue("chat");
-    mettreEnAvantChamp();
-    afficherStatut(`Prompt charge : ${texte}`);
-}
-
-/**
- * Active ou desactive tous les champs et boutons d'envoi.
- *
- * @param {boolean} disabled - true pour desactiver, false pour reactiver.
- */
-function setInputDisabled(disabled) {
-    for (const champ of champsTexte) champ.disabled = disabled;
-    for (const bouton of boutonsEnvoyer) bouton.disabled = disabled;
-}
-
-/* ============================================================
-   SAISIE VOCALE
-   ============================================================ */
-
-/**
- * Retourne le champ a utiliser pour la saisie vocale.
- *
- * @returns {HTMLInputElement|null}
- */
-function obtenirChampPourVoix() {
-    if (document.activeElement === champTexteSecondaire && champTexteSecondaire) {
-        return champTexteSecondaire;
-    }
-    if (document.activeElement === champTexte && champTexte) {
-        return champTexte;
-    }
-    if (vueChat?.classList.contains("est-en-conversation") && champTexteSecondaire) {
-        return champTexteSecondaire;
-    }
-    return champTexte;
-}
-
-/**
- * Met a jour l'etat visuel des boutons micro.
- *
- * @param {boolean} estActif
- */
-function mettreAJourEtatBoutonsMicro(estActif) {
-    for (const bouton of boutonsMicro) {
-        bouton.classList.toggle("est-en-ecoute", estActif);
-        bouton.setAttribute("aria-pressed", estActif ? "true" : "false");
-        bouton.title = estActif ? "Arreter la saisie vocale" : "Demarrer la saisie vocale";
-    }
-}
-
-/**
- * Fusionne le texte deja present et la transcription courante.
- *
- * @param {string} prefixe
- * @param {string} texte
- * @returns {string}
- */
-function composerTexteVocal(prefixe, texte) {
-    const base = (prefixe || "").trim();
-    const suite = (texte || "").trim();
-    if (!base) return suite;
-    if (!suite) return base;
-    return `${base} ${suite}`;
-}
-
-/**
- * Traduit un code erreur de reconnaissance vocale en message utilisateur.
- *
- * @param {string} code
- * @returns {string}
- */
-function obtenirMessageErreurVocale(code) {
-    if (code === "not-allowed" || code === "service-not-allowed") {
-        return "L'acces au microphone a ete refuse.";
-    }
-    if (code === "no-speech") {
-        return "Aucune voix detectee.";
-    }
-    if (code === "audio-capture") {
-        return "Aucun microphone n'a ete detecte.";
-    }
-    if (code === "network") {
-        return "Erreur reseau pendant la saisie vocale.";
-    }
-    return "La saisie vocale a rencontre un probleme.";
-}
-
-/**
- * Initialise l'instance de reconnaissance vocale si disponible.
- *
- * @returns {SpeechRecognition|null}
- */
-function initialiserReconnaissanceVocale() {
-    if (!SpeechRecognitionAPI) return null;
-    if (reconnaissanceVocale) return reconnaissanceVocale;
-
-    reconnaissanceVocale = new SpeechRecognitionAPI();
-    reconnaissanceVocale.lang = "fr-FR";
-    reconnaissanceVocale.continuous = true;
-    reconnaissanceVocale.interimResults = true;
-    reconnaissanceVocale.maxAlternatives = 1;
-
-    reconnaissanceVocale.onstart = () => {
-        ecouteVocaleActive = true;
-        mettreAJourEtatBoutonsMicro(true);
-        afficherStatut("Saisie vocale active. Parlez, puis recliquez sur le micro pour arreter.");
-    };
-
-    reconnaissanceVocale.onresult = (event) => {
-        let interimTranscript = "";
-
-        for (let index = event.resultIndex; index < event.results.length; index += 1) {
-            const resultat = event.results[index];
-            const texte = resultat[0]?.transcript || "";
-            if (resultat.isFinal) {
-                transcriptFinal += `${texte} `;
-            } else {
-                interimTranscript += texte;
-            }
-        }
-
-        if (!champVocalActif) return;
-        const texte = composerTexteVocal(baseTranscriptionVocale, `${transcriptFinal} ${interimTranscript}`);
-        synchroniserTousLesChamps(texte);
-        champVocalActif.focus();
-    };
-
-    reconnaissanceVocale.onerror = (event) => {
-        ecouteVocaleActive = false;
-        mettreAJourEtatBoutonsMicro(false);
-        afficherStatut(obtenirMessageErreurVocale(event.error));
-    };
-
-    reconnaissanceVocale.onend = () => {
-        const texteFinal = composerTexteVocal(baseTranscriptionVocale, transcriptFinal);
-        if (champVocalActif && texteFinal) {
-            synchroniserTousLesChamps(texteFinal);
-            champVocalActif.focus();
-        }
-
-        ecouteVocaleActive = false;
-        mettreAJourEtatBoutonsMicro(false);
-        if (transcriptFinal.trim()) {
-            afficherStatut("Saisie vocale terminee.");
-        }
-    };
-
-    return reconnaissanceVocale;
-}
-
-/**
- * Demarre ou arrete la saisie vocale.
- */
-function basculerSaisieVocale() {
-    const reconnaissance = initialiserReconnaissanceVocale();
-    if (!reconnaissance) {
-        afficherStatut("La saisie vocale n'est pas prise en charge par ce navigateur.");
-        return;
-    }
-
-    if (ecouteVocaleActive) {
-        reconnaissance.stop();
-        return;
-    }
-
-    champVocalActif = obtenirChampPourVoix();
-    if (!champVocalActif) {
-        afficherStatut("Aucun champ de saisie disponible.");
-        return;
-    }
-
-    champVocalActif.focus();
-    baseTranscriptionVocale = champVocalActif.value.trim();
-    transcriptFinal = "";
-
-    try {
-        reconnaissance.start();
-    } catch {
-        afficherStatut("Impossible de demarrer la saisie vocale pour le moment.");
-    }
-}
-
-/* ============================================================
-   CREATION DE BOUTONS D'ACTION (copier, editer)
-   ============================================================ */
-
-/**
- * Cree un bouton d'action avec icone Font Awesome.
- *
- * @param {string}   iconClass - Classe Font Awesome a afficher.
- * @param {string}   title     - Titre au survol.
- * @param {Function} onClick   - Callback au clic.
- * @returns {HTMLButtonElement}
- */
-function creerBoutonAction(iconClass, title, onClick) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.title = title;
-    btn.setAttribute("aria-label", title);
-    btn.innerHTML = `<i class="${iconClass}" aria-hidden="true"></i>`;
-    btn.style.cssText = "width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:999px;color:#888;cursor:pointer;font-size:12px;transition:color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease";
-    btn.addEventListener("mouseenter", () => {
-        btn.style.color = "#f2f3f7";
-        btn.style.background = "rgba(255,255,255,0.08)";
-        btn.style.borderColor = "rgba(255,255,255,0.14)";
-        btn.style.transform = "translateY(-1px)";
-    });
-    btn.addEventListener("mouseleave", () => {
-        btn.style.color = "#888";
-        btn.style.background = "rgba(255,255,255,0.03)";
-        btn.style.borderColor = "rgba(255,255,255,0.06)";
-        btn.style.transform = "";
-    });
-    btn.addEventListener("click", onClick);
-    return btn;
-}
-
-/**
- * Cree une barre d'actions (copier, editer...) pour un message.
- * La barre est invisible par defaut et apparait au survol du conteneur.
- *
- * @returns {HTMLDivElement}
- */
-function creerBarreActions() {
-    const barre = document.createElement("div");
-    barre.style.cssText = "display:flex;gap:10px;margin-top:6px;opacity:0;transition:opacity 0.2s ease;pointer-events:none";
-    return barre;
-}
-
-/**
- * Attache les listeners de survol pour afficher/masquer la barre d'actions.
- *
- * @param {HTMLElement} conteneur   - Element parent (conteneur message).
- * @param {HTMLElement} barreActions - Barre d'actions a afficher/masquer.
- */
-function attacherHoverActions(conteneur, barreActions) {
-    conteneur.addEventListener("mouseenter", () => {
-        barreActions.style.opacity = "1";
-        barreActions.style.pointerEvents = "auto";
-    });
-    conteneur.addEventListener("mouseleave", () => {
-        barreActions.style.opacity = "0";
-        barreActions.style.pointerEvents = "none";
-    });
-}
-
-/* ============================================================
-   GESTION DES MESSAGES
-   ============================================================ */
-
-/**
- * Ajoute un message (utilisateur ou assistant) dans le fil de conversation.
- *
- * @param {string} contenu - Texte du message.
- * @param {string} type    - "utilisateur" ou "assistant".
- * @returns {HTMLElement|null} L'element <article> du message cree.
- */
-function ajouterMessage(contenu, type) {
-    if (!filConversation || !contenu) return null;
-
-    // Conteneur du message (flex column)
-    const conteneurMessage = document.createElement("div");
-    conteneurMessage.style.cssText = `display:flex;flex-direction:column;margin-bottom:12px;align-items:${type === "utilisateur" ? "flex-end" : "flex-start"}`;
-
-    // Article du message
-    const article = document.createElement("article");
-    article.className = `message message-${type}`;
-    const paragraphe = document.createElement("p");
-    paragraphe.textContent = contenu;
-    article.append(paragraphe);
-    conteneurMessage.append(article);
-
-    // Barre d'actions (copier + editer pour l'utilisateur)
-    const barreActions = creerBarreActions();
-
-    const btnCopier = creerBoutonAction("fa-regular fa-copy", "Copier", () => {
-        navigator.clipboard.writeText(contenu)
-            .then(() => afficherStatut("Copie!"))
-            .catch(() => afficherStatut("Erreur lors de la copie"));
-    });
-    barreActions.append(btnCopier);
-
-    if (type === "utilisateur") {
-        const btnEditer = creerBoutonAction("fa-regular fa-pen-to-square", "Editer", () => {
-            editerMessage(contenu, article, conteneurMessage);
-        });
-        barreActions.append(btnEditer);
-    }
-
-    conteneurMessage.append(barreActions);
-    attacherHoverActions(conteneurMessage, barreActions);
-
-    filConversation.append(conteneurMessage);
-    faireDefilerConversationEnBas();
-    sauvegarderSnapshotConversation();
-    return article;
-}
-
-/**
- * Cree un message assistant vide (placeholder) dans le fil de conversation.
- * Utilise pendant le streaming de la reponse.
- *
- * @returns {HTMLElement|null} L'element <article> cree.
- */
-function creerMessageAssistantVide() {
-    if (!filConversation) return null;
-
-    const conteneurMessage = document.createElement("div");
-    conteneurMessage.style.cssText = "display:flex;flex-direction:column;margin-bottom:12px;align-items:flex-start";
-
-    const article = document.createElement("article");
-    article.className = "message message-assistant";
-    const paragraphe = document.createElement("p");
-    paragraphe.textContent = "";
-    article.append(paragraphe);
-    conteneurMessage.append(article);
-
-    // Barre d'actions (copier uniquement)
-    const barreActions = creerBarreActions();
-    const btnCopier = creerBoutonAction("fa-regular fa-copy", "Copier", () => {
-        navigator.clipboard.writeText(paragraphe.textContent)
-            .then(() => afficherStatut("Copie!"))
-            .catch(() => afficherStatut("Erreur lors de la copie"));
-    });
-    barreActions.append(btnCopier);
-    conteneurMessage.append(barreActions);
-    attacherHoverActions(conteneurMessage, barreActions);
-
-    filConversation.append(conteneurMessage);
-    faireDefilerConversationEnBas();
-    sauvegarderSnapshotConversation();
-    return article;
-}
-
-/**
- * Fait defiler uniquement la zone de conversation.
- *
- * @param {ScrollBehavior} [behavior="smooth"] - Type de scroll.
- */
-function faireDefilerConversationEnBas(behavior = "smooth") {
-    if (!filConversation) return;
-    filConversation.scrollTo({
-        top: filConversation.scrollHeight,
+function scrollConversationToBottom(behavior = 'smooth') {
+    if (!dom.conversationFeed) return;
+    dom.conversationFeed.scrollTo({
+        top: dom.conversationFeed.scrollHeight,
         behavior,
     });
 }
 
-/**
- * Extrait une version serialisable de la conversation visible.
- *
- * @returns {Array<{ role: string, content: string }>}
- */
-function collecterMessagesDepuisDOM() {
-    if (!filConversation) return [];
+function createIconActionButton(iconClass, title, onClick, extraClass = '') {
+    const button = document.createElement('button');
+    const icon = document.createElement('i');
+    button.type = 'button';
+    button.className = `icon-action-button${extraClass ? ` ${extraClass}` : ''}`;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    icon.className = iconClass;
+    icon.setAttribute('aria-hidden', 'true');
+    button.append(icon);
+    button.addEventListener('click', onClick);
+    return button;
+}
 
-    return Array.from(filConversation.querySelectorAll(".message"))
-        .map((element) => {
-            const contenu = element.querySelector("p")?.textContent || "";
-            const role = element.classList.contains("message-assistant") ? "assistant" : "user";
-            return { role, content: contenu };
+function createMessageActionBar() {
+    const bar = document.createElement('div');
+    bar.className = 'message-action-bar';
+    return bar;
+}
+
+function bindHoverActionBar(container, actionBar) {
+    container.addEventListener('mouseenter', () => actionBar.classList.add('est-visible'));
+    container.addEventListener('mouseleave', () => actionBar.classList.remove('est-visible'));
+}
+
+function buildMessageShell(content, role) {
+    const shell = document.createElement('div');
+    shell.className = `message-shell message-shell-${role}`;
+
+    const article = document.createElement('article');
+    article.className = `message message-${role}`;
+    article.dataset.role = role;
+
+    const paragraph = document.createElement('p');
+    paragraph.textContent = content;
+    article.append(paragraph);
+    shell.append(article);
+
+    return { shell, article, paragraph };
+}
+
+function appendMessage(content, role) {
+    if (!dom.conversationFeed || !content) return null;
+
+    const { shell, article } = buildMessageShell(content, role);
+    const actionBar = createMessageActionBar();
+
+    actionBar.append(
+        createIconActionButton('fa-regular fa-copy', 'Copier', () => {
+            navigator.clipboard.writeText(content)
+                .then(() => showStatus('Message copié.'))
+                .catch(() => showStatus('Erreur lors de la copie.'));
         })
+    );
+
+    if (role === 'utilisateur') {
+        actionBar.append(
+            createIconActionButton('fa-regular fa-pen-to-square', 'Modifier', () => {
+                openEditMessageModal(content, article, shell);
+            })
+        );
+    }
+
+    shell.append(actionBar);
+    bindHoverActionBar(shell, actionBar);
+    dom.conversationFeed.append(shell);
+    scrollConversationToBottom();
+    saveConversationSnapshot();
+    return article;
+}
+
+function createAssistantPlaceholder() {
+    if (!dom.conversationFeed) return null;
+
+    const { shell, article, paragraph } = buildMessageShell('', 'assistant');
+    const actionBar = createMessageActionBar();
+
+    actionBar.append(
+        createIconActionButton('fa-regular fa-copy', 'Copier', () => {
+            navigator.clipboard.writeText(paragraph.textContent || '')
+                .then(() => showStatus('Message copié.'))
+                .catch(() => showStatus('Erreur lors de la copie.'));
+        })
+    );
+
+    shell.append(actionBar);
+    bindHoverActionBar(shell, actionBar);
+    dom.conversationFeed.append(shell);
+    scrollConversationToBottom();
+    saveConversationSnapshot();
+    return article;
+}
+
+function collectMessagesFromDom() {
+    if (!dom.conversationFeed) return [];
+
+    return Array.from(dom.conversationFeed.querySelectorAll('.message'))
+        .map((message) => ({
+            role: message.dataset.role === 'assistant' ? 'assistant' : 'user',
+            content: message.querySelector('p')?.textContent || '',
+        }))
         .filter((message) => message.content.trim().length > 0);
 }
 
-/**
- * Sauvegarde un instantane local de la conversation en cours.
- */
-function sauvegarderSnapshotConversation() {
-    try {
-        const snapshot = {
-            conversationId,
-            isConversationMode: !!vueChat?.classList.contains("est-en-conversation"),
-            messages: collecterMessagesDepuisDOM(),
-            savedAt: Date.now(),
-        };
-        sessionStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify(snapshot));
-    } catch {
-        // sessionStorage non disponible
-    }
+function saveConversationSnapshot() {
+    const snapshot = {
+        conversationId: state.conversationId,
+        isConversationMode: !!dom.chatView?.classList.contains('est-en-conversation'),
+        messages: collectMessagesFromDom(),
+    };
+    storageSet(STORAGE_KEYS.snapshot, JSON.stringify(snapshot));
 }
 
-/**
- * Supprime l'instantane local de conversation.
- */
-function effacerSnapshotConversation() {
-    try {
-        sessionStorage.removeItem(STORAGE_KEYS.snapshot);
-    } catch {
-        // sessionStorage non disponible
-    }
+function clearConversationSnapshot() {
+    storageRemove(STORAGE_KEYS.snapshot);
 }
 
-/**
- * Sauvegarde le brouillon courant pour resister aux reloads.
- *
- * @param {string} valeur
- */
-function sauvegarderBrouillon(valeur) {
-    try {
-        if (valeur && valeur.trim()) {
-            sessionStorage.setItem(STORAGE_KEYS.draft, valeur);
-        } else {
-            sessionStorage.removeItem(STORAGE_KEYS.draft);
-        }
-    } catch {
-        // sessionStorage non disponible
-    }
-}
+function restoreConversationSnapshot() {
+    const raw = storageGet(STORAGE_KEYS.snapshot);
+    if (!raw || !dom.conversationFeed) return false;
 
-/**
- * Restaure un instantane local de conversation si disponible.
- *
- * @returns {boolean} true si un instantane a ete restaure.
- */
-function restaurerSnapshotConversation() {
     try {
-        const brut = sessionStorage.getItem(STORAGE_KEYS.snapshot);
-        if (!brut || !filConversation) return false;
-
-        const snapshot = JSON.parse(brut);
+        const snapshot = JSON.parse(raw);
         const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : [];
         if (!messages.length) return false;
 
-        filConversation.innerHTML = "";
+        dom.conversationFeed.innerHTML = '';
         for (const message of messages) {
-            ajouterMessage(message.content, message.role === "assistant" ? "assistant" : "utilisateur");
+            appendMessage(message.content, message.role === 'assistant' ? 'assistant' : 'utilisateur');
         }
 
-        if (snapshot.isConversationMode) {
-            activerModeConversation();
-        }
-
-        faireDefilerConversationEnBas("auto");
-
+        setConversationMode(Boolean(snapshot.isConversationMode));
+        scrollConversationToBottom('auto');
         return true;
     } catch {
         return false;
     }
 }
 
-/**
- * Restaure le brouillon en attente s'il existe.
- */
-function restaurerBrouillon() {
-    try {
-        const draft = sessionStorage.getItem(STORAGE_KEYS.draft) || "";
-        if (draft) {
-            synchroniserTousLesChamps(draft);
-        }
-    } catch {
-        // sessionStorage non disponible
-    }
+function restoreDraft() {
+    const draft = storageGet(STORAGE_KEYS.draft, '');
+    if (draft) syncAllInputs(draft);
 }
 
-/* ============================================================
-   EDITION DE MESSAGE
-   ============================================================ */
+function createModalBackdrop(extraClass = '') {
+    const backdrop = document.createElement('div');
+    backdrop.className = `modale-overlay${extraClass ? ` ${extraClass}` : ''}`;
+    return backdrop;
+}
 
-/**
- * Ouvre une modale d'edition pour un message utilisateur.
- * Si le texte est modifie, regenere la reponse de l'assistant.
- *
- * @param {string}      contenuOriginal  - Texte actuel du message.
- * @param {HTMLElement}  articleOriginal  - Element <article> du message.
- * @param {HTMLElement}  conteneurMessage - Conteneur parent du message.
- */
-function editerMessage(contenuOriginal, articleOriginal, conteneurMessage) {
-    // Overlay semi-transparent
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9998";
+function createModalCard(extraClass = '') {
+    const card = document.createElement('div');
+    card.className = `modale-confirmation${extraClass ? ` ${extraClass}` : ''}`;
+    return card;
+}
 
-    // Boite d'edition
-    const boiteEdition = document.createElement("div");
-    boiteEdition.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a2e;border:2px solid #4a7c9e;border-radius:8px;padding:20px;z-index:9999;min-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.5);color:#fff";
+function openConfirmModal({ title, message, confirmLabel = 'Confirmer', danger = false }) {
+    return new Promise((resolve) => {
+        const previousFocus = document.activeElement;
+        const backdrop = createModalBackdrop();
+        const card = createModalCard();
+        const titleNode = document.createElement('h3');
+        const messageNode = document.createElement('p');
+        const actions = document.createElement('div');
+        const cancelButton = document.createElement('button');
+        const confirmButton = document.createElement('button');
 
-    const titre = document.createElement("h3");
-    titre.textContent = "Editer le message";
-    titre.style.marginTop = "0";
-    boiteEdition.append(titre);
+        titleNode.textContent = title;
+        messageNode.textContent = message;
+        actions.className = 'modale-actions';
 
-    const textarea = document.createElement("textarea");
-    textarea.value = contenuOriginal;
-    textarea.style.cssText = "width:100%;height:120px;padding:10px;margin-bottom:12px;border-radius:4px;border:1px solid #4a7c9e;background:#0f3460;color:#fff;font-family:monospace;resize:vertical";
-    boiteEdition.append(textarea);
+        cancelButton.type = 'button';
+        cancelButton.className = 'modale-bouton modale-bouton-secondaire';
+        cancelButton.textContent = 'Annuler';
 
-    const btnConteneur = document.createElement("div");
-    btnConteneur.style.cssText = "display:flex;gap:10px";
+        confirmButton.type = 'button';
+        confirmButton.className = `modale-bouton ${danger ? 'modale-bouton-danger' : 'modale-bouton-primaire'}`;
+        confirmButton.textContent = confirmLabel;
 
-    const btnValider = document.createElement("button");
-    btnValider.textContent = "Valider et regenerer";
-    btnValider.style.cssText = "padding:10px 16px;background:#00d4ff;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold";
+        let settled = false;
+        const close = (value) => {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', onKeyDown);
+            backdrop.remove();
+            previousFocus?.focus?.();
+            resolve(value);
+        };
 
-    const btnAnnuler = document.createElement("button");
-    btnAnnuler.textContent = "Annuler";
-    btnAnnuler.style.cssText = "padding:10px 16px;background:#4a5568;color:#fff;border:none;border-radius:4px;cursor:pointer";
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') close(false);
+        };
 
-    /** Ferme la modale d'edition. */
-    const fermer = () => {
-        boiteEdition.remove();
-        overlay.remove();
+        backdrop.addEventListener('click', (event) => {
+            if (event.target === backdrop) close(false);
+        });
+        cancelButton.addEventListener('click', () => close(false));
+        confirmButton.addEventListener('click', () => close(true));
+        document.addEventListener('keydown', onKeyDown);
+
+        actions.append(cancelButton, confirmButton);
+        card.append(titleNode, messageNode, actions);
+        backdrop.append(card);
+        document.body.append(backdrop);
+        confirmButton.focus();
+    });
+}
+
+function openEditMessageModal(originalContent, article, shell) {
+    const previousFocus = document.activeElement;
+    const backdrop = createModalBackdrop('modale-overlay-editor');
+    const card = createModalCard('modale-editor');
+    const title = document.createElement('h3');
+    const textarea = document.createElement('textarea');
+    const actions = document.createElement('div');
+    const cancelButton = document.createElement('button');
+    const saveButton = document.createElement('button');
+
+    title.textContent = 'Modifier le message';
+    textarea.className = 'modale-editor-textarea';
+    textarea.value = originalContent;
+
+    actions.className = 'modale-actions';
+    cancelButton.type = 'button';
+    cancelButton.className = 'modale-bouton modale-bouton-secondaire';
+    cancelButton.textContent = 'Annuler';
+
+    saveButton.type = 'button';
+    saveButton.className = 'modale-bouton modale-bouton-primaire';
+    saveButton.textContent = 'Valider et régénérer';
+
+    const close = () => {
+        backdrop.remove();
+        previousFocus?.focus?.();
     };
 
-    btnAnnuler.addEventListener("click", fermer);
-    overlay.addEventListener("click", fermer);
-
-    btnValider.addEventListener("click", async () => {
-        const nouveauTexte = textarea.value.trim();
-        if (nouveauTexte && nouveauTexte !== contenuOriginal) {
-            fermer();
-            // Mettre a jour le message dans le DOM
-            const paragraphe = articleOriginal.querySelector("p");
-            if (paragraphe) paragraphe.textContent = nouveauTexte;
-
-            // Supprimer la reponse assistant suivante si elle existe
-            const nextElement = conteneurMessage.nextElementSibling;
-            if (nextElement) {
-                const articleSuivant = nextElement.querySelector(".message-assistant");
-                if (articleSuivant) nextElement.remove();
-            }
-
-            // Regenerer la reponse avec le message modifie
-            await envoyerEtStreamer(nouveauTexte, "Reponse regeneree.");
-        } else {
-            fermer();
-        }
+    cancelButton.addEventListener('click', close);
+    backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop) close();
     });
 
-    btnConteneur.append(btnValider, btnAnnuler);
-    boiteEdition.append(btnConteneur);
-    document.body.append(overlay, boiteEdition);
+    saveButton.addEventListener('click', async () => {
+        const nextContent = textarea.value.trim();
+        if (!nextContent || nextContent === originalContent) {
+            close();
+            return;
+        }
 
+        close();
+        article.querySelector('p').textContent = nextContent;
+
+        const nextShell = shell.nextElementSibling;
+        if (nextShell?.querySelector('.message-assistant')) {
+            nextShell.remove();
+        }
+
+        saveConversationSnapshot();
+        await sendAndStream(nextContent, 'Réponse régénérée.');
+    });
+
+    actions.append(cancelButton, saveButton);
+    card.append(title, textarea, actions);
+    backdrop.append(card);
+    document.body.append(backdrop);
     textarea.focus();
     textarea.select();
 }
 
-/* ============================================================
-   COMMUNICATION AVEC LE BACKEND (streaming SSE)
-   ============================================================ */
-
-/**
- * Lit un flux SSE depuis la reponse fetch et alimente progressivement
- * le paragraphe du message assistant.
- *
- * @param {Response}    response         - Reponse fetch (stream SSE).
- * @param {HTMLElement} articleAssistant  - Element <article> a remplir.
- * @returns {Promise<string>} Texte complet de la reponse.
- */
-async function lireStreamSSE(response, articleAssistant) {
+async function readSSEStream(response, assistantArticle) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
-    let fullReply = '';
+    const paragraph = assistantArticle?.querySelector('p') || null;
+    let reply = '';
     let buffer = '';
 
-    if (paragraphe) paragraphe.textContent = "";
+    if (paragraph) paragraph.textContent = '';
 
     while (true) {
         const { done, value } = await reader.read();
@@ -799,430 +611,847 @@ async function lireStreamSSE(response, articleAssistant) {
 
         for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6);
+            const payload = line.slice(6);
+            if (payload === '[DONE]') continue;
 
-            if (data === '[DONE]') continue;
-
-            // Extraire les meta (conversationId)
             try {
-                const parsed = JSON.parse(data);
+                const parsed = JSON.parse(payload);
                 if (parsed.type === 'meta' && parsed.conversationId) {
                     setConversationId(parsed.conversationId);
                     continue;
                 }
             } catch {
-                // pas du JSON, c'est du texte brut
+                // Raw text chunk.
             }
 
-            // Accumuler le texte de la reponse
-            const texte = data.replace(/\\n/g, '\n');
-            fullReply += texte;
+            const text = payload.replace(/\\n/g, '\n');
+            reply += text;
 
-            if (paragraphe) {
-                paragraphe.textContent = fullReply;
-                faireDefilerConversationEnBas();
-                sauvegarderSnapshotConversation();
+            if (paragraph) {
+                paragraph.textContent = reply;
+                scrollConversationToBottom();
+                saveConversationSnapshot();
             }
         }
     }
 
-    return fullReply;
+    return reply;
 }
 
-/**
- * Envoie un message au backend et affiche la reponse en streaming.
- * Fonction partagee par l'envoi normal et la regeneration apres edition.
- *
- * @param {string} message       - Message a envoyer au LLM.
- * @param {string} statutSucces  - Message de statut a afficher en cas de succes.
- */
-async function envoyerEtStreamer(message, statutSucces) {
-    enCoursDeReponse = true;
-    setInputDisabled(true);
+async function sendAndStream(message, successStatus) {
+    state.isResponding = true;
+    setInputsDisabled(true);
 
-    const articleAssistant = creerMessageAssistantVide();
-    const paragraphe = articleAssistant ? articleAssistant.querySelector("p") : null;
-    if (paragraphe) paragraphe.textContent = "...";
+    const assistantArticle = createAssistantPlaceholder();
+    const paragraph = assistantArticle?.querySelector('p') || null;
+    if (paragraph) paragraph.textContent = '...';
 
     try {
         const response = await fetch(`${API_BASE}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, conversationId }),
+            body: JSON.stringify({
+                message,
+                conversationId: state.conversationId,
+            }),
         });
 
         if (!response.ok) {
-            throw new Error(`Erreur serveur: ${response.status}`);
+            throw new Error(`Erreur serveur : ${response.status}`);
         }
 
-        const fullReply = await lireStreamSSE(response, articleAssistant);
-
-        if (!fullReply && paragraphe) {
-            paragraphe.textContent = "(Pas de reponse du serveur)";
+        const fullReply = await readSSEStream(response, assistantArticle);
+        if (!fullReply && paragraph) {
+            paragraph.textContent = '(Pas de réponse du serveur)';
         }
 
-        afficherStatut(statutSucces);
-        chargerHistorique();
-    } catch (err) {
-        if (window.Logger) Logger.error('Erreur chat: ' + err.message, 'app.js');
-        if (paragraphe) {
-            paragraphe.textContent = `Erreur : ${err.message}. Verifiez que le serveur backend est lance.`;
+        showStatus(successStatus);
+        refreshHistory();
+    } catch (error) {
+        if (window.Logger) Logger.error(`Erreur chat : ${error.message}`, 'app.js');
+        if (paragraph) {
+            paragraph.textContent = `Erreur : ${error.message}. Vérifiez que le serveur backend est lancé.`;
         }
-        afficherStatut("Erreur de connexion au serveur.");
+        showStatus('Erreur de connexion au serveur.');
     } finally {
-        enCoursDeReponse = false;
-        setInputDisabled(false);
+        state.isResponding = false;
+        setInputsDisabled(false);
     }
 }
 
-/**
- * Gere l'envoi d'un message depuis le champ de saisie actif.
- * Valide l'input, bascule en mode conversation, puis streame la reponse.
- */
-async function envoyerMessage() {
-    if (enCoursDeReponse) return;
+async function sendMessage() {
+    if (state.isResponding) return;
+    stopSpeechInput(true);
 
-    const champActif = obtenirChampActif();
-    const boutonActif = document.activeElement === boutonEnvoyerSecondaire ? boutonEnvoyerSecondaire : boutonEnvoyer;
+    const activeInput = getActiveInput();
+    const activeButton = document.activeElement === dom.secondarySendButton
+        ? dom.secondarySendButton
+        : dom.primarySendButton;
 
-    if (!champActif) return;
-    const valeur = champActif.value.trim();
-    if (!valeur) {
-        champActif.focus();
-        afficherStatut("Ecrivez un message avant d'envoyer.");
+    if (!activeInput) return;
+    const text = activeInput.value.trim();
+
+    if (!text) {
+        activeInput.focus();
+        showStatus('Écrivez un message avant d\'envoyer.');
         return;
     }
 
-    activerModeConversation();
+    setConversationMode(true);
 
-    // Micro-animation du bouton envoyer
-    if (boutonActif) boutonActif.style.transform = "scale(0.94)";
-    setTimeout(() => {
-        if (boutonActif) boutonActif.style.transform = "";
-    }, 140);
+    if (activeButton) activeButton.classList.add('est-envoi');
+    setTimeout(() => activeButton?.classList.remove('est-envoi'), 140);
 
-    ajouterMessage(valeur, "utilisateur");
-    synchroniserTousLesChamps("");
-    afficherStatut("Message envoye...");
+    appendMessage(text, 'utilisateur');
+    syncAllInputs('');
+    showStatus('Message envoyé...');
 
-    await envoyerEtStreamer(valeur, "Reponse recue.");
-
-    if (champTexteSecondaire) champTexteSecondaire.focus();
+    await sendAndStream(text, 'Réponse reçue.');
+    dom.secondaryInput?.focus();
 }
 
-/* ============================================================
-   HISTORIQUE DES CONVERSATIONS
-   ============================================================ */
+function createHistoryDeleteButton(conversation) {
+    return createIconActionButton(
+        'fa-solid fa-trash',
+        'Supprimer',
+        async (event) => {
+            event.stopPropagation();
+            const confirmed = await openConfirmModal({
+                title: 'Supprimer la conversation',
+                message: `Voulez-vous vraiment supprimer "${conversation.title}" ? Cette action est définitive.`,
+                confirmLabel: 'Supprimer',
+                danger: true,
+            });
 
-/**
- * Charge la liste des conversations depuis le backend
- * et met a jour la sidebar.
- */
-async function chargerHistorique() {
-    if (!listeHistorique) return;
-    try {
-        const res = await fetch(`${API_BASE}/api/conversations`);
-        if (!res.ok) return;
-        const conversations = await res.json();
-        listeHistorique.innerHTML = '';
+            if (!confirmed) return;
 
-        for (const conv of conversations) {
-            const btn = document.createElement("button");
-            btn.className = "raccourci raccourci-historique";
-            btn.dataset.conversationId = conv.id;
-            btn.style.cssText = "position:relative;display:flex;align-items:center;justify-content:space-between;width:100%";
+            try {
+                const response = await fetch(`${API_BASE}/api/conversations/${conversation.id}`, {
+                    method: 'DELETE',
+                });
 
-            if (conv.id === conversationId) {
-                btn.classList.add("est-actif");
+                if (!response.ok) return;
+
+                if (state.conversationId === conversation.id) {
+                    resetConversation();
+                }
+
+                refreshHistory();
+                showStatus('Conversation supprimée.');
+            } catch (error) {
+                if (window.Logger) Logger.error(`Erreur suppression : ${error.message}`, 'app.js');
+                showStatus('Erreur lors de la suppression.');
             }
+        },
+        'history-action-button'
+    );
+}
 
-            // Texte du titre (tronque)
-            const texteBtn = document.createElement("span");
-            texteBtn.textContent = conv.title;
-            texteBtn.style.cssText = "flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+function createEmptyHistoryState() {
+    const emptyState = document.createElement('div');
+    const title = document.createElement('strong');
+    const description = document.createElement('span');
 
-            // Menu d'actions (supprimer) visible au survol
-            const menuActions = document.createElement("div");
-            menuActions.style.cssText = "display:flex;gap:6px;opacity:0;transition:opacity 0.2s ease;pointer-events:none";
+    emptyState.className = 'history-empty-state';
+    title.textContent = 'Aucune conversation';
+    description.textContent = 'Vos prochains échanges apparaîtront ici.';
+    emptyState.append(title, description);
 
-            const btnSupprimer = creerBoutonSuppressionConversation(conv);
-            menuActions.append(btnSupprimer);
+    return emptyState;
+}
 
-            btn.append(texteBtn, menuActions);
-            attacherHoverActions(btn, menuActions);
-            btn.addEventListener("click", () => chargerConversation(conv.id));
-            listeHistorique.append(btn);
+function createHistoryItem(conversation) {
+    const button = document.createElement('button');
+    const title = document.createElement('span');
+    const actions = document.createElement('div');
+
+    button.type = 'button';
+    button.className = 'raccourci raccourci-historique history-item';
+    button.dataset.conversationId = conversation.id;
+    if (conversation.id === state.conversationId) {
+        button.classList.add('est-actif');
+    }
+
+    title.className = 'history-item-title';
+    title.textContent = conversation.title;
+    actions.className = 'history-item-actions';
+    actions.append(createHistoryDeleteButton(conversation));
+
+    button.append(title, actions);
+    bindHoverActionBar(button, actions);
+    button.addEventListener('click', () => loadConversation(conversation.id));
+    return button;
+}
+
+async function refreshHistory() {
+    if (!dom.historyList) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/conversations`);
+        if (!response.ok) return;
+        const conversations = await response.json();
+
+        dom.historyList.innerHTML = '';
+        if (!conversations.length) {
+            dom.historyList.append(createEmptyHistoryState());
+            return;
+        }
+
+        for (const conversation of conversations) {
+            dom.historyList.append(createHistoryItem(conversation));
         }
     } catch {
-        // Serveur non disponible
+        // Backend unavailable.
     }
 }
 
-/**
- * Cree le bouton de suppression pour un element d'historique.
- *
- * @param {Object} conv - Objet conversation { id, title }.
- * @returns {HTMLButtonElement}
- */
-function creerBoutonSuppressionConversation(conv) {
-    const btnSupprimer = document.createElement("button");
-    btnSupprimer.textContent = "\u2715";
-    btnSupprimer.title = "Supprimer";
-    btnSupprimer.style.cssText = "padding:4px 6px;background:transparent;border:none;color:#888;cursor:pointer;font-size:16px;line-height:1;transition:color 0.2s ease;min-width:24px;min-height:24px;display:flex;align-items:center;justify-content:center";
+async function loadConversation(id) {
+    stopSpeechInput(true);
 
-    btnSupprimer.addEventListener("mouseenter", () => { btnSupprimer.style.color = "#ff4444"; });
-    btnSupprimer.addEventListener("mouseleave", () => { btnSupprimer.style.color = "#888"; });
-
-    btnSupprimer.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const confirme = await ouvrirModaleConfirmation({
-            titre: "Supprimer la conversation",
-            message: `Voulez-vous vraiment supprimer "${conv.title}" ? Cette action est definitive.`,
-            texteConfirmation: "Supprimer",
-        });
-        if (!confirme) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/conversations/${conv.id}`, { method: 'DELETE' });
-            if (res.ok) {
-                if (conversationId === conv.id) {
-                    setConversationId(null);
-                    reinitialiserConversation();
-                }
-                chargerHistorique();
-                afficherStatut("Conversation supprimee");
-            }
-        } catch (err) {
-            if (window.Logger) Logger.error('Erreur suppression: ' + err.message, 'app.js');
-            afficherStatut("Erreur lors de la suppression");
-        }
-    });
-
-    return btnSupprimer;
-}
-
-/**
- * Affiche une modale de confirmation custom.
- *
- * @param {Object} options
- * @param {string} options.titre
- * @param {string} options.message
- * @param {string} [options.texteConfirmation="Confirmer"]
- * @returns {Promise<boolean>}
- */
-function ouvrirModaleConfirmation({ titre, message, texteConfirmation = "Confirmer" }) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement("div");
-        overlay.className = "modale-overlay";
-
-        const modale = document.createElement("div");
-        modale.className = "modale-confirmation";
-        modale.setAttribute("role", "dialog");
-        modale.setAttribute("aria-modal", "true");
-        modale.setAttribute("aria-labelledby", "modale-confirmation-titre");
-
-        const titreElement = document.createElement("h3");
-        titreElement.id = "modale-confirmation-titre";
-        titreElement.textContent = titre;
-
-        const messageElement = document.createElement("p");
-        messageElement.textContent = message;
-
-        const actions = document.createElement("div");
-        actions.className = "modale-actions";
-
-        const boutonAnnuler = document.createElement("button");
-        boutonAnnuler.type = "button";
-        boutonAnnuler.className = "modale-bouton modale-bouton-secondaire";
-        boutonAnnuler.textContent = "Annuler";
-
-        const boutonConfirmer = document.createElement("button");
-        boutonConfirmer.type = "button";
-        boutonConfirmer.className = "modale-bouton modale-bouton-danger";
-        boutonConfirmer.textContent = texteConfirmation;
-
-        let resolu = false;
-        const fermer = (valeur) => {
-            if (resolu) return;
-            resolu = true;
-            document.removeEventListener("keydown", gererClavier);
-            overlay.remove();
-            resolve(valeur);
-        };
-
-        const gererClavier = (event) => {
-            if (event.key === "Escape") {
-                fermer(false);
-            }
-        };
-
-        overlay.addEventListener("click", (event) => {
-            if (event.target === overlay) {
-                fermer(false);
-            }
-        });
-        boutonAnnuler.addEventListener("click", () => fermer(false));
-        boutonConfirmer.addEventListener("click", () => fermer(true));
-        document.addEventListener("keydown", gererClavier);
-
-        actions.append(boutonAnnuler, boutonConfirmer);
-        modale.append(titreElement, messageElement, actions);
-        overlay.append(modale);
-        document.body.append(overlay);
-        boutonConfirmer.focus();
-    });
-}
-
-/**
- * Charge et affiche une conversation existante depuis le backend.
- *
- * @param {string} id - Identifiant de la conversation a charger.
- */
-async function chargerConversation(id) {
     try {
-        const res = await fetch(`${API_BASE}/api/conversations/${id}`);
-        if (!res.ok) return;
-        const conv = await res.json();
+        const response = await fetch(`${API_BASE}/api/conversations/${id}`);
+        if (!response.ok) return;
+        const conversation = await response.json();
 
         setConversationId(id);
-        if (filConversation) filConversation.innerHTML = "";
+        dom.conversationFeed.innerHTML = '';
 
-        for (const msg of conv.messages) {
-            const type = msg.role === 'assistant' ? 'assistant' : 'utilisateur';
-            ajouterMessage(msg.content, type);
+        for (const message of conversation.messages) {
+            appendMessage(message.content, message.role === 'assistant' ? 'assistant' : 'utilisateur');
         }
 
-        activerVue("chat");
-        activerModeConversation();
-        faireDefilerConversationEnBas("auto");
-        sauvegarderSnapshotConversation();
-        chargerHistorique();
-        afficherStatut("Conversation chargee.");
+        activateView('chat');
+        setConversationMode(true);
+        scrollConversationToBottom('auto');
+        saveConversationSnapshot();
+        refreshHistory();
+        showStatus('Conversation chargée.');
     } catch {
-        afficherStatut("Erreur lors du chargement.");
+        showStatus('Erreur lors du chargement.');
     }
 }
 
-/* ============================================================
-   EFFETS VISUELS
-   ============================================================ */
+function setAudioMeter(bar, label, value, prefix) {
+    const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+    if (bar) bar.style.width = `${safeValue}%`;
+    if (label) label.textContent = `${prefix} : ${safeValue}%`;
+}
 
-/**
- * Cree un effet ripple (ondulation) sur un bouton au clic.
- *
- * @param {HTMLElement} bouton - Bouton cible.
- * @param {PointerEvent} event - Evenement pointeur.
- */
-function creerRipple(bouton, event) {
-    const rect = bouton.getBoundingClientRect();
-    const ripple = document.createElement("span");
-    ripple.className = "ripple";
+function resetMicMeter() {
+    setAudioMeter(dom.micLevelBar, dom.micLevelText, 0, 'Niveau micro');
+}
+
+function resetSpeakerMeter() {
+    setAudioMeter(dom.speakerLevelBar, dom.speakerLevelText, 0, 'Sortie audio');
+    if (dom.speakerLevelText) dom.speakerLevelText.textContent = 'Sortie audio : inactive';
+}
+
+function stopMicTest() {
+    state.micTestActive = false;
+
+    if (state.micFrame) {
+        cancelAnimationFrame(state.micFrame);
+        state.micFrame = null;
+    }
+
+    if (state.micSource) {
+        state.micSource.disconnect();
+        state.micSource = null;
+    }
+
+    if (state.micAnalyser) {
+        state.micAnalyser.disconnect();
+        state.micAnalyser = null;
+    }
+
+    if (state.micStream) {
+        for (const track of state.micStream.getTracks()) track.stop();
+        state.micStream = null;
+    }
+
+    if (state.micContext) {
+        state.micContext.close().catch(() => {});
+        state.micContext = null;
+    }
+
+    if (dom.testMicButton) dom.testMicButton.textContent = 'Tester le micro';
+    resetMicMeter();
+    setDiagnosticStatus(dom.micStatus, 'Aucun test micro en cours.');
+}
+
+function animateMicLevel() {
+    if (!state.micAnalyser) return;
+
+    const buffer = new Uint8Array(state.micAnalyser.fftSize);
+    state.micAnalyser.getByteTimeDomainData(buffer);
+
+    let sum = 0;
+    for (const value of buffer) {
+        const normalized = (value - 128) / 128;
+        sum += normalized * normalized;
+    }
+
+    const rms = Math.sqrt(sum / buffer.length);
+    setAudioMeter(dom.micLevelBar, dom.micLevelText, Math.min(100, rms * 280), 'Niveau micro');
+
+    if (state.micTestActive) {
+        state.micFrame = requestAnimationFrame(animateMicLevel);
+    }
+}
+
+async function loadAudioDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+        if (dom.audioInputSelect) {
+            dom.audioInputSelect.innerHTML = '<option value="">Diagnostic audio non supporté</option>';
+            dom.audioInputSelect.disabled = true;
+        }
+        setDiagnosticStatus(dom.micStatus, 'Votre navigateur ne permet pas de lister les périphériques audio.');
+        return;
+    }
+
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter((device) => device.kind === 'audioinput');
+
+        if (!dom.audioInputSelect) return;
+        dom.audioInputSelect.innerHTML = '';
+
+        if (!audioInputs.length) {
+            dom.audioInputSelect.innerHTML = '<option value="">Aucun microphone détecté</option>';
+            dom.audioInputSelect.disabled = true;
+            setDiagnosticStatus(dom.micStatus, 'Aucun microphone détecté.');
+            return;
+        }
+
+        dom.audioInputSelect.disabled = false;
+        for (const [index, input] of audioInputs.entries()) {
+            const option = document.createElement('option');
+            option.value = input.deviceId;
+            option.textContent = input.label || `Microphone ${index + 1}`;
+            dom.audioInputSelect.append(option);
+        }
+
+        const selectedId = audioInputs.some((input) => input.deviceId === state.selectedAudioInputId)
+            ? state.selectedAudioInputId
+            : audioInputs[0].deviceId;
+
+        state.selectedAudioInputId = selectedId;
+        dom.audioInputSelect.value = selectedId;
+        setDiagnosticStatus(dom.micStatus, 'Choisissez un micro puis lancez le test.');
+    } catch {
+        setDiagnosticStatus(dom.micStatus, 'Impossible de charger les périphériques audio.');
+    }
+}
+
+async function prepareAudioDevices() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setDiagnosticStatus(dom.micStatus, 'Le navigateur ne prend pas en charge l\'accès au microphone.');
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        for (const track of stream.getTracks()) track.stop();
+        await loadAudioDevices();
+    } catch {
+        setDiagnosticStatus(dom.micStatus, 'Accès au microphone refusé. Autorisez le micro pour lancer le diagnostic.');
+    }
+}
+
+async function toggleMicTest() {
+    if (state.micTestActive) {
+        stopMicTest();
+        return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setDiagnosticStatus(dom.micStatus, 'Le navigateur ne prend pas en charge le test micro.');
+        return;
+    }
+
+    try {
+        stopSpeechInput(true);
+        stopMicTest();
+
+        const constraints = state.selectedAudioInputId
+            ? { audio: { deviceId: { exact: state.selectedAudioInputId } } }
+            : { audio: true };
+
+        state.micStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error('audio-context-unavailable');
+
+        state.micContext = new AudioContextClass();
+        state.micAnalyser = state.micContext.createAnalyser();
+        state.micAnalyser.fftSize = 1024;
+        state.micSource = state.micContext.createMediaStreamSource(state.micStream);
+        state.micSource.connect(state.micAnalyser);
+        state.micTestActive = true;
+
+        if (dom.testMicButton) dom.testMicButton.textContent = 'Arrêter le test';
+        setDiagnosticStatus(dom.micStatus, 'Le micro est en écoute. Parlez pour voir le niveau bouger.');
+        animateMicLevel();
+    } catch (error) {
+        stopMicTest();
+        if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+            setDiagnosticStatus(dom.micStatus, 'Accès au microphone refusé par le navigateur.');
+            return;
+        }
+        if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') {
+            setDiagnosticStatus(dom.micStatus, 'Le micro sélectionné est introuvable.');
+            return;
+        }
+        setDiagnosticStatus(dom.micStatus, 'Impossible de démarrer le test micro.');
+    }
+}
+
+async function playSpeakerTest() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+        setDiagnosticStatus(dom.speakerStatus, 'Le navigateur ne prend pas en charge le test de sortie audio.');
+        return;
+    }
+
+    try {
+        if (!state.speakerContext || state.speakerContext.state === 'closed') {
+            state.speakerContext = new AudioContextClass();
+        }
+
+        if (state.speakerContext.state === 'suspended') {
+            await state.speakerContext.resume();
+        }
+
+        const oscillator = state.speakerContext.createOscillator();
+        const gain = state.speakerContext.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, state.speakerContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.08, state.speakerContext.currentTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, state.speakerContext.currentTime + 0.6);
+
+        oscillator.connect(gain);
+        gain.connect(state.speakerContext.destination);
+        oscillator.start();
+        oscillator.stop(state.speakerContext.currentTime + 0.62);
+
+        dom.speakerLevelBar?.classList.add('est-active');
+        if (dom.speakerLevelBar) dom.speakerLevelBar.style.width = '100%';
+        if (dom.speakerLevelText) dom.speakerLevelText.textContent = 'Sortie audio : test en cours';
+        setDiagnosticStatus(dom.speakerStatus, 'Un bip de test est en cours. Vérifiez vos haut-parleurs ou votre casque.');
+
+        setTimeout(() => {
+            dom.speakerLevelBar?.classList.remove('est-active');
+            resetSpeakerMeter();
+            setDiagnosticStatus(dom.speakerStatus, 'Si vous avez entendu le bip, la sortie audio fonctionne.');
+        }, 700);
+    } catch {
+        setDiagnosticStatus(dom.speakerStatus, 'Impossible de jouer le son test.');
+    }
+}
+
+function updateMicButtons(active) {
+    for (const button of dom.micButtons) {
+        button.classList.toggle('est-en-ecoute', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        const label = active ? 'Arrêter la saisie vocale' : 'Démarrer la saisie vocale';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+    }
+}
+
+function normalizeSpeechText(text) {
+    return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function getSpeechInput() {
+    if (document.activeElement === dom.secondaryInput && dom.secondaryInput) return dom.secondaryInput;
+    if (document.activeElement === dom.primaryInput && dom.primaryInput) return dom.primaryInput;
+    if (dom.chatView?.classList.contains('est-en-conversation') && dom.secondaryInput) return dom.secondaryInput;
+    return dom.primaryInput;
+}
+
+function mergeSpeechText(prefix, text) {
+    const base = normalizeSpeechText(prefix);
+    const next = normalizeSpeechText(text);
+    if (!base) return next;
+    if (!next) return base;
+    return `${base} ${next}`;
+}
+
+function resetSpeechState() {
+    state.speechActive = false;
+    state.speechShouldRestart = false;
+    state.speechErrored = false;
+    state.speechFinalText = '';
+}
+
+function getSpeechErrorMessage(code) {
+    if (code === 'not-allowed' || code === 'service-not-allowed') {
+        return 'L\'accès au microphone a été refusé.';
+    }
+    if (code === 'no-speech') return 'Aucune voix détectée.';
+    if (code === 'audio-capture') return 'Aucun microphone n\'a été détecté.';
+    if (code === 'network') return 'Erreur réseau pendant la saisie vocale.';
+    return 'La saisie vocale a rencontré un problème.';
+}
+
+function ensureSpeechRecognition() {
+    if (!SpeechRecognitionAPI) return null;
+    if (state.speechRecognition) return state.speechRecognition;
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+        state.speechActive = true;
+        state.speechErrored = false;
+        updateMicButtons(true);
+        showStatus('Saisie vocale active. Parlez, puis recliquez sur le micro pour arrêter.');
+    };
+
+    recognition.onresult = (event) => {
+        let interim = '';
+
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            const transcript = result[0]?.transcript || '';
+            if (result.isFinal) {
+                state.speechFinalText += `${transcript} `;
+            } else {
+                interim += transcript;
+            }
+        }
+
+        if (!state.speechInput) return;
+        const nextText = mergeSpeechText(state.speechBaseText, `${state.speechFinalText} ${interim}`);
+        syncAllInputs(nextText);
+        state.speechInput.focus();
+    };
+
+    recognition.onerror = (event) => {
+        state.speechErrored = true;
+        state.speechShouldRestart = false;
+        state.speechActive = false;
+        updateMicButtons(false);
+        showStatus(getSpeechErrorMessage(event.error));
+    };
+
+    recognition.onend = () => {
+        const finalText = mergeSpeechText(state.speechBaseText, state.speechFinalText);
+        if (state.speechInput && finalText) {
+            syncAllInputs(finalText);
+            state.speechInput.focus();
+        }
+
+        const shouldRestart = state.speechShouldRestart && !state.speechErrored;
+        state.speechActive = false;
+        updateMicButtons(false);
+
+        if (shouldRestart) {
+            try {
+                recognition.start();
+                return;
+            } catch {
+                // Fall back to normal stop.
+            }
+        }
+
+        if (state.speechFinalText.trim() && !state.speechErrored) {
+            showStatus('Saisie vocale terminée.');
+        }
+
+        resetSpeechState();
+    };
+
+    state.speechRecognition = recognition;
+    return recognition;
+}
+
+function stopSpeechInput(silent = false) {
+    if (!state.speechRecognition || (!state.speechActive && !state.speechShouldRestart)) return;
+
+    state.speechShouldRestart = false;
+    state.speechErrored = false;
+
+    try {
+        state.speechRecognition.stop();
+    } catch {
+        resetSpeechState();
+        updateMicButtons(false);
+    }
+
+    if (!silent) showStatus('Saisie vocale arrêtée.');
+}
+
+function toggleSpeechInput() {
+    const recognition = ensureSpeechRecognition();
+    if (!recognition) {
+        showStatus('La saisie vocale n\'est pas prise en charge par ce navigateur.');
+        return;
+    }
+
+    if (state.speechActive || state.speechShouldRestart) {
+        stopSpeechInput();
+        return;
+    }
+
+    state.speechInput = getSpeechInput();
+    if (!state.speechInput) {
+        showStatus('Aucun champ de saisie disponible.');
+        return;
+    }
+
+    state.speechInput.focus();
+    state.speechBaseText = state.speechInput.value.trim();
+    state.speechFinalText = '';
+    state.speechErrored = false;
+    state.speechShouldRestart = true;
+
+    try {
+        recognition.start();
+    } catch {
+        resetSpeechState();
+        updateMicButtons(false);
+        showStatus('Impossible de démarrer la saisie vocale pour le moment.');
+    }
+}
+
+function openAudioModal() {
+    if (!dom.audioModal || state.audioModalOpen) return;
+    state.lastFocusedElement = document.activeElement;
+    dom.audioModal.hidden = false;
+    state.audioModalOpen = true;
+    dom.body.classList.add('modale-ouverte');
+    prepareAudioDevices();
+    setTimeout(() => dom.closeAudioModalButton?.focus(), 0);
+}
+
+function closeAudioModal() {
+    if (!dom.audioModal || !state.audioModalOpen) return;
+    dom.audioModal.hidden = true;
+    state.audioModalOpen = false;
+    dom.body.classList.remove('modale-ouverte');
+    stopMicTest();
+    state.lastFocusedElement?.focus?.();
+    state.lastFocusedElement = null;
+}
+
+function createRipple(button, event) {
+    const rect = button.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
     ripple.style.left = `${event.clientX - rect.left}px`;
     ripple.style.top = `${event.clientY - rect.top}px`;
-    bouton.append(ripple);
+    button.append(ripple);
     setTimeout(() => ripple.remove(), 520);
 }
 
-/* ============================================================
-   EVENEMENTS ET INITIALISATION
-   ============================================================ */
+function initAnimations() {
+    const animables = document.querySelectorAll(
+        '.logo, .bouton-lateral, .section-salutation, .boite-saisie, .suggestion, .carte, .zone-aide .aide-bouton, .entete, .element-liste, .message'
+    );
 
-/* --- Ripple sur tous les boutons --- */
-for (const bouton of boutonsInteractifs) {
-    bouton.addEventListener("pointerdown", (event) => creerRipple(bouton, event));
-}
-
-/* --- Spotlight qui suit le curseur --- */
-window.addEventListener("mousemove", (event) => {
-    racine.style.setProperty("--spotlight-x", `${event.clientX}px`);
-    racine.style.setProperty("--spotlight-y", `${event.clientY}px`);
-});
-
-/* --- Chargement initial --- */
-window.addEventListener("load", () => {
-    setTimeout(() => {
-        if (ecranChargement) ecranChargement.classList.add("cache");
-        body.classList.add("page-chargee");
-        activerVue("chat");
-        afficherStatut("Vue active : Chat");
-        restaurerSnapshotConversation();
-        restaurerBrouillon();
-        chargerHistorique();
-
-        // Restaurer la conversation active si elle existait
-        if (conversationId) {
-            chargerConversation(conversationId);
-        }
-    }, 900);
-});
-
-/* --- Navigation sidebar et boutons --- */
-for (const bouton of boutonsNavigation) {
-    bouton.addEventListener("click", () => {
-        const cible = bouton.dataset.viewTarget;
-        const prompt = bouton.dataset.prompt;
-
-        // "Nouveau chat" sans prompt → reinitialiser
-        if (cible === "chat" && bouton.classList.contains("bouton-principal") && !prompt) {
-            reinitialiserConversation();
-        }
-
-        if (cible) {
-            activerVue(cible);
-            afficherStatut(`Vue active : ${cible}`);
-        }
-
-        if (prompt) {
-            injecterPrompt(prompt);
-        }
-    });
-}
-
-/* --- Suggestions rapides --- */
-for (const suggestion of suggestions) {
-    suggestion.addEventListener("click", () => injecterPrompt(suggestion.textContent));
-}
-
-/* --- Cartes d'action (accueil) --- */
-for (const carte of cartesActions) {
-    carte.addEventListener("click", () => {
-        const cible = carte.dataset.viewTarget;
-        const prompt = carte.dataset.prompt;
-        if (cible) {
-            activerVue(cible);
-            afficherStatut(`Vue active : ${cible}`);
-        }
-        if (prompt) injecterPrompt(prompt);
-    });
-}
-
-/* --- Boutons d'action generiques (partage, piece jointe, voix) --- */
-for (const bouton of boutonsAction) {
-    bouton.addEventListener("click", () => {
-        const action = bouton.dataset.action;
-        if (action === "share") afficherStatut("Lien de partage prepare.");
-        if (action === "attach") afficherStatut("Module d'ajout pret. Vous pouvez connecter un document ici.");
-        if (action === "voice") basculerSaisieVocale();
-    });
-}
-
-/* --- Envoi de message (boutons + champs texte) --- */
-if (boutonEnvoyer && champTexte) {
-    for (const bouton of boutonsEnvoyer) {
-        bouton.addEventListener("click", envoyerMessage);
+    for (const [index, element] of animables.entries()) {
+        element.classList.add('animable');
+        element.style.transitionDelay = `${Math.min(index * 36, 240)}ms`;
     }
 
-    for (const champ of champsTexte) {
-        champ.addEventListener("input", (event) => synchroniserTousLesChamps(event.target.value));
-        champ.addEventListener("focus", synchroniserEtatSaisie);
-        champ.addEventListener("blur", synchroniserEtatSaisie);
-        champ.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
+    const observer = new IntersectionObserver(
+        (entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('est-visible');
+                    observer.unobserve(entry.target);
+                }
+            }
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -6% 0px' }
+    );
+
+    for (const element of animables) observer.observe(element);
+
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        dom.sidebar?.animate(
+            [
+                { opacity: 0, transform: 'translateX(-24px) scale(0.985)', filter: 'blur(16px)' },
+                { opacity: 1, transform: 'translateX(0) scale(1)', filter: 'blur(0)' },
+            ],
+            {
+                duration: 980,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'both',
+            }
+        );
+
+        dom.contentPanel?.animate(
+            [
+                { opacity: 0, transform: 'translateY(26px) scale(0.99)', filter: 'blur(18px)' },
+                { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0)' },
+            ],
+            {
+                duration: 1100,
+                delay: 80,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'both',
+            }
+        );
+    }
+}
+
+function bindGlobalEvents() {
+    for (const button of dom.interactiveButtons) {
+        button.addEventListener('pointerdown', (event) => createRipple(button, event));
+    }
+
+    window.addEventListener('mousemove', (event) => {
+        dom.root.style.setProperty('--spotlight-x', `${event.clientX}px`);
+        dom.root.style.setProperty('--spotlight-y', `${event.clientY}px`);
+    });
+
+    window.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopSpeechInput(true);
+            stopMicTest();
+            closeAudioModal();
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        stopSpeechInput(true);
+        stopMicTest();
+    });
+
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && state.audioModalOpen) {
+            closeAudioModal();
+        }
+    });
+}
+
+function bindNavigation() {
+    for (const button of dom.navButtons) {
+        button.addEventListener('click', () => {
+            stopSpeechInput(true);
+            const target = button.dataset.viewTarget;
+            const prompt = button.dataset.prompt;
+
+            if (target === 'chat' && button.classList.contains('bouton-principal') && !prompt) {
+                resetConversation();
+            }
+
+            if (target) {
+            activateView(target);
+            showStatus(`Vue active : ${target}`);
+            }
+
+            if (prompt) injectPrompt(prompt);
+        });
+    }
+
+    for (const suggestion of dom.suggestions) {
+        suggestion.addEventListener('click', () => injectPrompt(suggestion.textContent || ''));
+    }
+
+    for (const card of dom.actionCards) {
+        card.addEventListener('click', () => {
+            const target = card.dataset.viewTarget;
+            const prompt = card.dataset.prompt;
+            if (target) {
+                activateView(target);
+                showStatus(`Vue active : ${target}`);
+            }
+            if (prompt) injectPrompt(prompt);
+        });
+    }
+
+    for (const button of dom.actionButtons) {
+        button.addEventListener('click', () => {
+            const action = button.dataset.action;
+            if (action === 'share') showStatus('Lien de partage préparé.');
+            if (action === 'attach') showStatus('Module d\'ajout prêt. Vous pouvez connecter un document ici.');
+            if (action === 'voice') toggleSpeechInput();
+            if (action === 'audio-settings') openAudioModal();
+        });
+    }
+}
+
+function bindAudioModal() {
+    dom.closeAudioModalButton?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeAudioModal();
+    });
+
+    dom.audioModal?.addEventListener('click', (event) => {
+        if (event.target === dom.audioModal) {
+            closeAudioModal();
+        }
+    });
+
+    dom.audioInputSelect?.addEventListener('change', () => {
+        state.selectedAudioInputId = dom.audioInputSelect.value;
+        if (state.micTestActive) {
+            toggleMicTest();
+            setTimeout(() => toggleMicTest(), 150);
+        } else {
+            setDiagnosticStatus(dom.micStatus, 'Micro sélectionné. Lancez le test pour vérifier le niveau.');
+        }
+    });
+
+    dom.refreshAudioButton?.addEventListener('click', async () => {
+        stopMicTest();
+        await prepareAudioDevices();
+    });
+
+    dom.testMicButton?.addEventListener('click', toggleMicTest);
+    dom.testSpeakerButton?.addEventListener('click', playSpeakerTest);
+}
+
+function bindInputs() {
+    for (const button of dom.sendButtons) {
+        button.addEventListener('click', sendMessage);
+    }
+
+    for (const input of dom.textInputs) {
+        input.addEventListener('input', (event) => syncAllInputs(event.target.value));
+        input.addEventListener('focus', syncInputBoxesState);
+        input.addEventListener('blur', syncInputBoxesState);
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
                 event.preventDefault();
-                envoyerMessage();
+                sendMessage();
             }
         });
     }
 }
 
-/* --- Synchronisation initiale --- */
-synchroniserEtatSaisie();
+function initPage() {
+    initAnimations();
+    bindGlobalEvents();
+    bindNavigation();
+    bindAudioModal();
+    bindInputs();
+    syncInputBoxesState();
+
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            dom.loadingScreen?.classList.add('cache');
+            dom.body.classList.add('page-chargee');
+            activateView('chat', { immediate: true });
+            showStatus('Vue active : chat');
+            restoreConversationSnapshot();
+            restoreDraft();
+            refreshHistory();
+            animateViewEntrance(dom.chatView);
+
+            if (state.conversationId) {
+                loadConversation(state.conversationId);
+            }
+        }, 900);
+    });
+}
+
+initPage();
