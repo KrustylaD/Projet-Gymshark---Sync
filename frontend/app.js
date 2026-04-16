@@ -396,8 +396,47 @@ function escapeHtml(value) {
     });
 }
 
+function normalizeAssistantLine(line) {
+    let value = String(line || '').replace(/\t/g, '    ').trimEnd();
+
+    value = value
+        .replace(/^\s*[•●▪◦·]\s*/u, '- ')
+        .replace(/^\s*[–—]\s+/u, '- ')
+        .replace(/^\s*[✓✔☑]\s*/u, '- ')
+        .replace(/^\s*(\d+)[\)]\s+/u, '$1. ');
+
+    if (/^\s*\.(?=\S)/u.test(value)) {
+        value = value.replace(/^\s*\.\s*/u, '- ');
+    }
+
+    return value;
+}
+
+function normalizeAssistantContent(content) {
+    return String(content || '')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => normalizeAssistantLine(line))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function autoFormatInlineText(text) {
+    let value = String(text || '').trim();
+
+    if (!/^\*\*/.test(value)) {
+        value = value.replace(
+            /^([A-ZÀ-Ÿ0-9][^:\n]{1,34})\s:\s+(.+)$/u,
+            '**$1** : $2'
+        );
+    }
+
+    return value;
+}
+
 function renderInlineMarkdown(text) {
-    let html = escapeHtml(text);
+    let html = escapeHtml(autoFormatInlineText(text));
     const codeTokens = [];
 
     html = html.replace(/`([^`\n]+)`/g, (_, code) => {
@@ -419,84 +458,168 @@ function renderInlineMarkdown(text) {
     return html;
 }
 
-function isUnorderedListItem(line) {
-    return /^\s*[-*+]\s+/.test(line);
+function getListItemDescriptor(line) {
+    const unorderedMatch = line.match(/^\s*[-*+]\s+(.+)$/u);
+    if (unorderedMatch) {
+        return { type: 'ul', content: unorderedMatch[1].trim() };
+    }
+
+    const orderedMatch = line.match(/^\s*(\d+)\.\s+(.+)$/u);
+    if (orderedMatch) {
+        return { type: 'ol', number: Number(orderedMatch[1]), content: orderedMatch[2].trim() };
+    }
+
+    return null;
 }
 
-function isOrderedListItem(line) {
-    return /^\s*\d+\.\s+/.test(line);
+function getMarkdownHeading(line) {
+    const match = line.match(/^(#{1,4})\s+(.*)$/u);
+    if (!match) return null;
+
+    return {
+        level: Math.min(Math.max(match[1].length, 1), 4),
+        text: match[2].trim(),
+    };
 }
 
-function isPlainSectionTitle(line) {
+function isLikelySectionTitle(line, nextLine = '') {
     const value = line.trim();
-    return value.length > 0
-        && value.length <= 80
-        && !/^[-*+>#`]/.test(value)
-        && !/^\d+\.\s+/.test(value);
+    if (!value || value.length > 72) return false;
+    if (/[.!?]$/.test(value) && !/:$/.test(value)) return false;
+    if (/^[-*+>#`]/.test(value)) return false;
+    if (/^\d+\.\s+/.test(value)) return false;
+
+    const next = String(nextLine || '').trim();
+    return /:$/.test(value)
+        || Boolean(getListItemDescriptor(next))
+        || /^#{1,4}\s+/.test(value);
 }
 
-function renderMarkdownList(lines, ordered = false) {
-    const tag = ordered ? 'ol' : 'ul';
-    const itemPattern = ordered ? /^\s*\d+\.\s+/ : /^\s*[-*+]\s+/;
-    const items = lines.map((line) => `<li>${renderInlineMarkdown(line.replace(itemPattern, '').trim())}</li>`);
-    return `<${tag}>${items.join('')}</${tag}>`;
+function isStandaloneQuestion(line) {
+    const value = line.trim();
+    return value.endsWith('?') && value.length <= 120;
 }
 
-function renderAssistantBlock(block) {
-    const lines = String(block || '')
-        .split('\n')
-        .map((line) => line.trimEnd())
-        .filter((line) => line.trim().length > 0);
+function renderAssistantNodes(nodes) {
+    return nodes.map((node) => {
+        if (node.type === 'heading') {
+            return `<h${node.level}>${renderInlineMarkdown(node.text)}</h${node.level}>`;
+        }
 
-    if (!lines.length) return '';
+        if (node.type === 'hr') {
+            return '<hr>';
+        }
 
-    const firstLine = lines[0].trim();
-    const remainingLines = lines.slice(1);
-    const headingMatch = firstLine.match(/^(#{1,4})\s+(.*)$/);
+        if (node.type === 'list') {
+            const tag = node.ordered ? 'ol' : 'ul';
+            const startAttr = node.ordered && node.start > 1 ? ` start="${node.start}"` : '';
+            const items = node.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('');
+            return `<${tag}${startAttr}>${items}</${tag}>`;
+        }
 
-    if (headingMatch) {
-        const level = Math.min(Math.max(headingMatch[1].length, 1), 4);
-        const heading = `<h${level}>${renderInlineMarkdown(headingMatch[2].trim())}</h${level}>`;
-        if (!remainingLines.length) return heading;
-        return `${heading}${renderAssistantBlock(remainingLines.join('\n'))}`;
-    }
+        if (node.type === 'paragraph') {
+            const className = node.isQuestion ? ' class="assistant-question"' : '';
+            const content = node.lines.map((line) => renderInlineMarkdown(line)).join('<br>');
+            return `<p${className}>${content}</p>`;
+        }
 
-    if (lines.length === 1 && /^---+$/.test(firstLine)) {
-        return '<hr>';
-    }
-
-    if (lines.every(isUnorderedListItem)) {
-        return renderMarkdownList(lines, false);
-    }
-
-    if (lines.every(isOrderedListItem)) {
-        return renderMarkdownList(lines, true);
-    }
-
-    if (remainingLines.length && isPlainSectionTitle(firstLine) && remainingLines.every(isUnorderedListItem)) {
-        return `<h3>${renderInlineMarkdown(firstLine)}</h3>${renderMarkdownList(remainingLines, false)}`;
-    }
-
-    if (remainingLines.length && isPlainSectionTitle(firstLine) && remainingLines.every(isOrderedListItem)) {
-        return `<h3>${renderInlineMarkdown(firstLine)}</h3>${renderMarkdownList(remainingLines, true)}`;
-    }
-
-    if (remainingLines.length && isPlainSectionTitle(firstLine)) {
-        const paragraph = remainingLines.map((line) => renderInlineMarkdown(line.trim())).join('<br>');
-        return `<h3>${renderInlineMarkdown(firstLine)}</h3><p>${paragraph}</p>`;
-    }
-
-    return `<p>${lines.map((line) => renderInlineMarkdown(line.trim())).join('<br>')}</p>`;
+        return '';
+    }).join('');
 }
 
 function renderAssistantMessage(content) {
-    const normalized = String(content || '').replace(/\r\n?/g, '\n').trim();
+    const normalized = normalizeAssistantContent(content);
     if (!normalized) return '<p></p>';
 
-    return normalized
-        .split(/\n{2,}/)
-        .map((block) => renderAssistantBlock(block))
-        .join('');
+    const lines = normalized.split('\n');
+    const nodes = [];
+    let paragraphLines = [];
+    let listState = null;
+
+    const flushParagraph = () => {
+        if (!paragraphLines.length) return;
+        const snapshot = [...paragraphLines];
+        nodes.push({
+            type: 'paragraph',
+            lines: snapshot,
+            isQuestion: snapshot.length === 1 && isStandaloneQuestion(snapshot[0]),
+        });
+        paragraphLines = [];
+    };
+
+    const flushList = () => {
+        if (!listState) return;
+        nodes.push({
+            type: 'list',
+            ordered: listState.type === 'ol',
+            start: listState.start,
+            items: [...listState.items],
+        });
+        listState = null;
+    };
+
+    for (let index = 0; index < lines.length; index += 1) {
+        const rawLine = lines[index];
+        const line = rawLine.trim();
+        const nextLine = index + 1 < lines.length ? lines[index + 1] : '';
+
+        if (!line) {
+            flushParagraph();
+            flushList();
+            continue;
+        }
+
+        if (/^---+$/u.test(line)) {
+            flushParagraph();
+            flushList();
+            nodes.push({ type: 'hr' });
+            continue;
+        }
+
+        const markdownHeading = getMarkdownHeading(line);
+        if (markdownHeading) {
+            flushParagraph();
+            flushList();
+            nodes.push({ type: 'heading', ...markdownHeading });
+            continue;
+        }
+
+        if (isLikelySectionTitle(line, nextLine) && !getListItemDescriptor(line)) {
+            flushParagraph();
+            flushList();
+            nodes.push({
+                type: 'heading',
+                level: /:$/.test(line) ? 3 : 2,
+                text: line.replace(/:\s*$/u, '').trim(),
+            });
+            continue;
+        }
+
+        const listItem = getListItemDescriptor(line);
+        if (listItem) {
+            flushParagraph();
+
+            if (!listState || listState.type !== listItem.type) {
+                flushList();
+                listState = {
+                    type: listItem.type,
+                    start: listItem.type === 'ol' ? listItem.number : 1,
+                    items: [],
+                };
+            }
+
+            listState.items.push(listItem.content);
+            continue;
+        }
+
+        flushList();
+        paragraphLines.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+
+    return renderAssistantNodes(nodes);
 }
 
 function setMessageContent(article, contentNode, content, role) {

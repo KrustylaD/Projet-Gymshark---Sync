@@ -1385,13 +1385,15 @@ body.page-chargee .contenu-principal {
 
 .message {
     max-width: min(780px, 82%);
-    padding: 14px 16px;
+    padding: 16px 18px;
     border-radius: 24px;
     border: 1px solid var(--border);
     background: var(--bg-chat-assistant);
     backdrop-filter: blur(10px);
     box-shadow: var(--shadow-soft);
     animation: apparition-message var(--dur-med) var(--ease-smooth);
+    position: relative;
+    overflow: hidden;
 }
 
 .message p {
@@ -1433,10 +1435,24 @@ body.page-chargee .contenu-principal {
         linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
         rgba(255, 255, 255, 0.02);
     border-color: rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 22px 46px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.message-assistant::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(151, 168, 255, 0.9), rgba(125, 221, 255, 0.45));
+    opacity: 0.9;
 }
 
 .message-assistant .message-body {
     color: var(--text-soft);
+    padding-left: 2px;
 }
 
 .message-assistant .message-body h1,
@@ -1447,35 +1463,48 @@ body.page-chargee .contenu-principal {
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
+    text-wrap: balance;
 }
 
 .message-assistant .message-body h1 {
     font-size: 1.24rem;
+    margin-bottom: 0.1rem;
 }
 
 .message-assistant .message-body h2 {
     font-size: 1.08rem;
+    margin-top: 0.2rem;
 }
 
 .message-assistant .message-body h3,
 .message-assistant .message-body h4 {
     font-size: 0.98rem;
+    color: #eef2ff;
 }
 
 .message-assistant .message-body p {
     line-height: 1.72;
 }
 
+.message-assistant .message-body h2 + p,
+.message-assistant .message-body h3 + p,
+.message-assistant .message-body h2 + ul,
+.message-assistant .message-body h3 + ul,
+.message-assistant .message-body h2 + ol,
+.message-assistant .message-body h3 + ol {
+    margin-top: -0.1rem;
+}
+
 .message-assistant .message-body ul,
 .message-assistant .message-body ol {
     display: grid;
     gap: 0.46rem;
-    padding-left: 1.25rem;
+    padding-left: 1.35rem;
 }
 
 .message-assistant .message-body li {
     line-height: 1.62;
-    padding-left: 0.15rem;
+    padding-left: 0.18rem;
 }
 
 .message-assistant .message-body li::marker {
@@ -1506,6 +1535,14 @@ body.page-chargee .contenu-principal {
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
     margin: 0.1rem 0;
+}
+
+.message-assistant .message-body .assistant-question {
+    margin-top: 0.2rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: #eef2ff;
+    font-weight: 500;
 }
 
 .message-action-bar {
