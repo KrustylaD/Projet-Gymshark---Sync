@@ -651,10 +651,76 @@ function renderAssistantMessage(content) {
     return renderAssistantNodes(nodes);
 }
 
+function tryExtractAssistantTransportError(content) {
+    const rawContent = String(content || '').trim();
+    if (!rawContent) return '';
+
+    const isWrappedTransportError = /^Erreur\s*:\s*/i.test(rawContent)
+        && /ollama http error|internal server error|runner process has terminated|timeout|llm error|failed to fetch|networkerror|network request/i.test(rawContent);
+    const isPlainTransportError = /^(Ollama HTTP error|Failed to fetch|NetworkError|TypeError: Failed to fetch|Ollama request aborted)/i.test(rawContent);
+
+    if (isWrappedTransportError || isPlainTransportError) {
+        return rawContent.replace(/^Erreur\s*:\s*/i, '').trim();
+    }
+
+    if (!rawContent.startsWith('{') || !rawContent.includes('"message"')) return '';
+
+    try {
+        const parsed = JSON.parse(rawContent);
+        const message = typeof parsed?.message === 'string' ? parsed.message.trim() : '';
+        if (!message) return '';
+
+        if (/ollama|internal server error|runner process has terminated|timeout|llm error/i.test(message)) {
+            return message;
+        }
+    } catch {
+        return '';
+    }
+
+    return '';
+}
+
+function formatAssistantErrorMessage(message) {
+    const detail = String(message || '').trim();
+
+    if (!detail) {
+        return 'Le serveur de reponse a rencontre une erreur.';
+    }
+
+    if (/runner process has terminated|internal server error/i.test(detail)) {
+        return 'Le moteur local Ollama a rencontre une erreur interne. Verifiez Ollama puis reessayez.';
+    }
+
+    if (/timeout|aborted/i.test(detail)) {
+        return 'Le moteur local Ollama a mis trop de temps a repondre. Reessayez dans un instant.';
+    }
+
+    if (/failed to fetch|networkerror|network request|connexion|connection/i.test(detail)) {
+        return 'Connexion impossible avec le backend local. Verifiez que le serveur est lance.';
+    }
+
+    if (/ollama http error/i.test(detail)) {
+        return 'Le moteur local Ollama a retourne une erreur. Verifiez Ollama puis reessayez.';
+    }
+
+    return `Le serveur de reponse a rencontre une erreur : ${detail}`;
+}
+
+function getAssistantDisplayContent(content) {
+    const transportError = tryExtractAssistantTransportError(content);
+    if (transportError) {
+        return formatAssistantErrorMessage(transportError);
+    }
+
+    return String(content || '');
+}
+
 function setMessageContent(article, contentNode, content, role) {
     if (!article || !contentNode) return;
 
-    const rawContent = String(content || '');
+    const rawContent = role === 'assistant'
+        ? getAssistantDisplayContent(content)
+        : String(content || '');
     article.dataset.rawContent = rawContent;
 
     if (role === 'assistant') {
@@ -749,10 +815,11 @@ function collectMessagesFromDom() {
 }
 
 function saveConversationSnapshot() {
+    const messages = collectMessagesFromDom();
     const snapshot = {
         conversationId: state.conversationId,
-        isConversationMode: !!dom.chatView?.classList.contains('est-en-conversation'),
-        messages: collectMessagesFromDom(),
+        isConversationMode: messages.length > 0 || !!dom.chatView?.classList.contains('est-en-conversation'),
+        messages,
     };
     storageSet(STORAGE_KEYS.snapshot, JSON.stringify(snapshot));
 }
@@ -771,12 +838,14 @@ function restoreConversationSnapshot() {
         if (!messages.length) return false;
 
         dom.conversationFeed.innerHTML = '';
+        setConversationMode(true);
         for (const message of messages) {
             appendMessage(message.content, message.role === 'assistant' ? 'assistant' : 'utilisateur');
         }
 
-        setConversationMode(Boolean(snapshot.isConversationMode));
+        setConversationMode(true);
         scrollConversationToBottom('auto');
+        saveConversationSnapshot();
         return true;
     } catch {
         return false;
@@ -943,38 +1012,88 @@ async function readSSEStream(response, assistantArticle) {
         setMessageContent(assistantArticle, contentNode, '', 'assistant');
     }
 
+    const processEventBlock = (block) => {
+        const lines = String(block || '').split(/\r?\n/);
+        let eventType = 'message';
+        const dataLines = [];
+
+        for (const rawLine of lines) {
+            const line = rawLine.trimEnd();
+            if (!line || line.startsWith(':')) continue;
+
+            if (line.startsWith('event:')) {
+                eventType = line.slice(6).trim() || 'message';
+                continue;
+            }
+
+            if (line.startsWith('data:')) {
+                const payloadLine = line.slice(5);
+                dataLines.push(payloadLine.startsWith(' ') ? payloadLine.slice(1) : payloadLine);
+            }
+        }
+
+        const payload = dataLines.join('\n');
+        if (!payload) return;
+
+        if (eventType === 'error') {
+            let errorMessage = payload;
+
+            try {
+                const parsed = JSON.parse(payload);
+                if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+                    errorMessage = parsed.message.trim();
+                }
+            } catch {
+                // Keep raw payload as fallback.
+            }
+
+            throw new Error(errorMessage);
+        }
+
+        if (payload === '[DONE]') return;
+
+        try {
+            const parsed = JSON.parse(payload);
+            if (parsed.type === 'meta' && parsed.conversationId) {
+                setConversationId(parsed.conversationId);
+                return;
+            }
+
+            if (typeof parsed?.response === 'string') {
+                reply += parsed.response;
+            } else if (typeof parsed?.text === 'string') {
+                reply += parsed.text;
+            } else if (typeof parsed?.message?.content === 'string') {
+                reply += parsed.message.content;
+            } else {
+                return;
+            }
+        } catch {
+            reply += payload.replace(/\\n/g, '\n');
+        }
+
+        if (assistantArticle && contentNode) {
+            setMessageContent(assistantArticle, contentNode, reply, 'assistant');
+            scrollConversationToBottom();
+            saveConversationSnapshot();
+        }
+    };
+
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || '';
 
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const payload = line.slice(6);
-            if (payload === '[DONE]') continue;
-
-            try {
-                const parsed = JSON.parse(payload);
-                if (parsed.type === 'meta' && parsed.conversationId) {
-                    setConversationId(parsed.conversationId);
-                    continue;
-                }
-            } catch {
-                // Raw text chunk.
-            }
-
-            const text = payload.replace(/\\n/g, '\n');
-            reply += text;
-
-            if (assistantArticle && contentNode) {
-                setMessageContent(assistantArticle, contentNode, reply, 'assistant');
-                scrollConversationToBottom();
-                saveConversationSnapshot();
-            }
+        for (const eventBlock of events) {
+            processEventBlock(eventBlock);
         }
+    }
+
+    if (buffer.trim()) {
+        processEventBlock(buffer);
     }
 
     return reply;
@@ -1030,8 +1149,10 @@ async function sendAndStream(message, successStatus) {
                 `Erreur : ${error.message}. Vérifiez que le serveur backend est lancé.`,
                 'assistant'
             );
+            scrollConversationToBottom();
+            saveConversationSnapshot();
         }
-        showStatus('Erreur de connexion au serveur.');
+        showStatus('Erreur lors de la reponse du serveur.');
     } finally {
         state.isResponding = false;
         setInputsDisabled(false);
@@ -1200,16 +1321,17 @@ async function loadConversation(id) {
         const response = await fetch(`${API_BASE}/api/conversations/${id}`);
         if (!response.ok) return;
         const conversation = await response.json();
+        const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
 
         setConversationId(id);
         dom.conversationFeed.innerHTML = '';
+        setConversationMode(messages.length > 0);
 
-        for (const message of conversation.messages) {
+        for (const message of messages) {
             appendMessage(message.content, message.role === 'assistant' ? 'assistant' : 'utilisateur');
         }
 
         activateView('chat');
-        setConversationMode(true);
         scrollConversationToBottom('auto');
         saveConversationSnapshot();
         refreshHistory();
