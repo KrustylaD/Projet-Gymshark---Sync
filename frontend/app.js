@@ -383,6 +383,136 @@ function bindHoverActionBar(container, actionBar) {
     container.addEventListener('mouseleave', () => actionBar.classList.remove('est-visible'));
 }
 
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => {
+        const entities = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        };
+        return entities[char] || char;
+    });
+}
+
+function renderInlineMarkdown(text) {
+    let html = escapeHtml(text);
+    const codeTokens = [];
+
+    html = html.replace(/`([^`\n]+)`/g, (_, code) => {
+        const token = `%%CODE_TOKEN_${codeTokens.length}%%`;
+        codeTokens.push(`<code>${code}</code>`);
+        return token;
+    });
+
+    html = html
+        .replace(/\*\*([^\n*][\s\S]*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^\n_][\s\S]*?)__/g, '<strong>$1</strong>')
+        .replace(/\*(?!\s)([^*\n]+?)\*/g, '<em>$1</em>')
+        .replace(/_(?!\s)([^_\n]+?)_/g, '<em>$1</em>');
+
+    for (const [index, snippet] of codeTokens.entries()) {
+        html = html.replace(`%%CODE_TOKEN_${index}%%`, snippet);
+    }
+
+    return html;
+}
+
+function isUnorderedListItem(line) {
+    return /^\s*[-*+]\s+/.test(line);
+}
+
+function isOrderedListItem(line) {
+    return /^\s*\d+\.\s+/.test(line);
+}
+
+function isPlainSectionTitle(line) {
+    const value = line.trim();
+    return value.length > 0
+        && value.length <= 80
+        && !/^[-*+>#`]/.test(value)
+        && !/^\d+\.\s+/.test(value);
+}
+
+function renderMarkdownList(lines, ordered = false) {
+    const tag = ordered ? 'ol' : 'ul';
+    const itemPattern = ordered ? /^\s*\d+\.\s+/ : /^\s*[-*+]\s+/;
+    const items = lines.map((line) => `<li>${renderInlineMarkdown(line.replace(itemPattern, '').trim())}</li>`);
+    return `<${tag}>${items.join('')}</${tag}>`;
+}
+
+function renderAssistantBlock(block) {
+    const lines = String(block || '')
+        .split('\n')
+        .map((line) => line.trimEnd())
+        .filter((line) => line.trim().length > 0);
+
+    if (!lines.length) return '';
+
+    const firstLine = lines[0].trim();
+    const remainingLines = lines.slice(1);
+    const headingMatch = firstLine.match(/^(#{1,4})\s+(.*)$/);
+
+    if (headingMatch) {
+        const level = Math.min(Math.max(headingMatch[1].length, 1), 4);
+        const heading = `<h${level}>${renderInlineMarkdown(headingMatch[2].trim())}</h${level}>`;
+        if (!remainingLines.length) return heading;
+        return `${heading}${renderAssistantBlock(remainingLines.join('\n'))}`;
+    }
+
+    if (lines.length === 1 && /^---+$/.test(firstLine)) {
+        return '<hr>';
+    }
+
+    if (lines.every(isUnorderedListItem)) {
+        return renderMarkdownList(lines, false);
+    }
+
+    if (lines.every(isOrderedListItem)) {
+        return renderMarkdownList(lines, true);
+    }
+
+    if (remainingLines.length && isPlainSectionTitle(firstLine) && remainingLines.every(isUnorderedListItem)) {
+        return `<h3>${renderInlineMarkdown(firstLine)}</h3>${renderMarkdownList(remainingLines, false)}`;
+    }
+
+    if (remainingLines.length && isPlainSectionTitle(firstLine) && remainingLines.every(isOrderedListItem)) {
+        return `<h3>${renderInlineMarkdown(firstLine)}</h3>${renderMarkdownList(remainingLines, true)}`;
+    }
+
+    if (remainingLines.length && isPlainSectionTitle(firstLine)) {
+        const paragraph = remainingLines.map((line) => renderInlineMarkdown(line.trim())).join('<br>');
+        return `<h3>${renderInlineMarkdown(firstLine)}</h3><p>${paragraph}</p>`;
+    }
+
+    return `<p>${lines.map((line) => renderInlineMarkdown(line.trim())).join('<br>')}</p>`;
+}
+
+function renderAssistantMessage(content) {
+    const normalized = String(content || '').replace(/\r\n?/g, '\n').trim();
+    if (!normalized) return '<p></p>';
+
+    return normalized
+        .split(/\n{2,}/)
+        .map((block) => renderAssistantBlock(block))
+        .join('');
+}
+
+function setMessageContent(article, contentNode, content, role) {
+    if (!article || !contentNode) return;
+
+    const rawContent = String(content || '');
+    article.dataset.rawContent = rawContent;
+
+    if (role === 'assistant') {
+        contentNode.innerHTML = renderAssistantMessage(rawContent);
+        return;
+    }
+
+    contentNode.textContent = rawContent;
+}
+
 function copyTextToClipboard(getText) {
     const text = typeof getText === 'function' ? getText() : getText;
     navigator.clipboard.writeText(text || '')
@@ -421,22 +551,23 @@ function buildMessageShell(content, role) {
     article.className = `message message-${role}`;
     article.dataset.role = role;
 
-    const paragraph = document.createElement('p');
-    paragraph.textContent = content;
-    article.append(paragraph);
+    const contentNode = document.createElement('div');
+    contentNode.className = 'message-body';
+    article.append(contentNode);
+    setMessageContent(article, contentNode, content, role);
     shell.append(article);
 
-    return { shell, article, paragraph };
+    return { shell, article, contentNode };
 }
 
 function appendMessage(content, role) {
     if (!dom.conversationFeed || !content) return null;
 
-    const { shell, article, paragraph } = buildMessageShell(content, role);
+    const { shell, article, contentNode } = buildMessageShell(content, role);
     const actionBar = buildMessageActionBar({
-        getCopyContent: () => paragraph.textContent || '',
+        getCopyContent: () => article.dataset.rawContent || contentNode.textContent || '',
         onEdit: role === 'utilisateur'
-            ? () => openEditMessageModal(paragraph.textContent || '', article, shell)
+            ? () => openEditMessageModal(article.dataset.rawContent || '', article, shell)
             : null,
     });
     mountConversationShell(shell, actionBar);
@@ -446,9 +577,9 @@ function appendMessage(content, role) {
 function createAssistantPlaceholder() {
     if (!dom.conversationFeed) return null;
 
-    const { shell, article, paragraph } = buildMessageShell('', 'assistant');
+    const { shell, article, contentNode } = buildMessageShell('', 'assistant');
     const actionBar = buildMessageActionBar({
-        getCopyContent: () => paragraph.textContent || '',
+        getCopyContent: () => article.dataset.rawContent || contentNode.textContent || '',
     });
     mountConversationShell(shell, actionBar);
     return article;
@@ -460,7 +591,7 @@ function collectMessagesFromDom() {
     return Array.from(dom.conversationFeed.querySelectorAll('.message'))
         .map((message) => ({
             role: message.dataset.role === 'assistant' ? 'assistant' : 'user',
-            content: message.querySelector('p')?.textContent || '',
+            content: message.dataset.rawContent || message.querySelector('.message-body')?.textContent || '',
         }))
         .filter((message) => message.content.trim().length > 0);
 }
@@ -613,7 +744,7 @@ function openEditMessageModal(originalContent, article, shell) {
         }
 
         close();
-        article.querySelector('p').textContent = nextContent;
+        setMessageContent(article, article.querySelector('.message-body'), nextContent, 'utilisateur');
 
         const nextShell = shell.nextElementSibling;
         if (nextShell?.querySelector('.message-assistant')) {
@@ -652,11 +783,13 @@ function openEditMessageModal(originalContent, article, shell) {
 async function readSSEStream(response, assistantArticle) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const paragraph = assistantArticle?.querySelector('p') || null;
+    const contentNode = assistantArticle?.querySelector('.message-body') || null;
     let reply = '';
     let buffer = '';
 
-    if (paragraph) paragraph.textContent = '';
+    if (assistantArticle && contentNode) {
+        setMessageContent(assistantArticle, contentNode, '', 'assistant');
+    }
 
     while (true) {
         const { done, value } = await reader.read();
@@ -684,8 +817,8 @@ async function readSSEStream(response, assistantArticle) {
             const text = payload.replace(/\\n/g, '\n');
             reply += text;
 
-            if (paragraph) {
-                paragraph.textContent = reply;
+            if (assistantArticle && contentNode) {
+                setMessageContent(assistantArticle, contentNode, reply, 'assistant');
                 scrollConversationToBottom();
                 saveConversationSnapshot();
             }
@@ -710,8 +843,10 @@ async function sendAndStream(message, successStatus) {
     setInputsDisabled(true);
 
     const assistantArticle = createAssistantPlaceholder();
-    const paragraph = assistantArticle?.querySelector('p') || null;
-    if (paragraph) paragraph.textContent = '...';
+    const contentNode = assistantArticle?.querySelector('.message-body') || null;
+    if (assistantArticle && contentNode) {
+        setMessageContent(assistantArticle, contentNode, '...', 'assistant');
+    }
 
     try {
         const response = await fetch(`${API_BASE}/api/chat`, {
@@ -728,16 +863,21 @@ async function sendAndStream(message, successStatus) {
         }
 
         const fullReply = await readSSEStream(response, assistantArticle);
-        if (!fullReply && paragraph) {
-            paragraph.textContent = '(Pas de réponse du serveur)';
+        if (!fullReply && assistantArticle && contentNode) {
+            setMessageContent(assistantArticle, contentNode, '(Pas de réponse du serveur)', 'assistant');
         }
 
         showStatus(successStatus);
         refreshHistory();
     } catch (error) {
         if (window.Logger) Logger.error(`Erreur chat : ${error.message}`, 'app.js');
-        if (paragraph) {
-            paragraph.textContent = `Erreur : ${error.message}. Vérifiez que le serveur backend est lancé.`;
+        if (assistantArticle && contentNode) {
+            setMessageContent(
+                assistantArticle,
+                contentNode,
+                `Erreur : ${error.message}. Vérifiez que le serveur backend est lancé.`,
+                'assistant'
+            );
         }
         showStatus('Erreur de connexion au serveur.');
     } finally {

@@ -1398,14 +1398,114 @@ body.page-chargee .contenu-principal {
     line-height: 1.6;
 }
 
+.message-body {
+    display: grid;
+    gap: 0.78rem;
+}
+
+.message-body > * {
+    margin: 0;
+}
+
+.message-body > :first-child {
+    margin-top: 0;
+}
+
+.message-body > :last-child {
+    margin-bottom: 0;
+}
+
 .message-utilisateur {
     margin-left: auto;
     background: var(--bg-chat-user);
     border-color: rgba(255, 255, 255, 0.08);
 }
 
+.message-utilisateur .message-body {
+    display: block;
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
 .message-assistant {
     margin-right: auto;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+        rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-assistant .message-body {
+    color: var(--text-soft);
+}
+
+.message-assistant .message-body h1,
+.message-assistant .message-body h2,
+.message-assistant .message-body h3,
+.message-assistant .message-body h4 {
+    color: var(--text-main);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.message-assistant .message-body h1 {
+    font-size: 1.24rem;
+}
+
+.message-assistant .message-body h2 {
+    font-size: 1.08rem;
+}
+
+.message-assistant .message-body h3,
+.message-assistant .message-body h4 {
+    font-size: 0.98rem;
+}
+
+.message-assistant .message-body p {
+    line-height: 1.72;
+}
+
+.message-assistant .message-body ul,
+.message-assistant .message-body ol {
+    display: grid;
+    gap: 0.46rem;
+    padding-left: 1.25rem;
+}
+
+.message-assistant .message-body li {
+    line-height: 1.62;
+    padding-left: 0.15rem;
+}
+
+.message-assistant .message-body li::marker {
+    color: var(--accent);
+}
+
+.message-assistant .message-body strong {
+    color: #f8faff;
+    font-weight: 700;
+}
+
+.message-assistant .message-body em {
+    color: #dce4ff;
+}
+
+.message-assistant .message-body code {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(151, 168, 255, 0.14);
+    border: 1px solid rgba(151, 168, 255, 0.18);
+    color: #edf1ff;
+    font-size: 0.84em;
+}
+
+.message-assistant .message-body hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    margin: 0.1rem 0;
 }
 
 .message-action-bar {
