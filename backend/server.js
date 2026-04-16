@@ -10,7 +10,12 @@ const logger = require('./logger');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* --- Middlewares globaux --- */
+/*
+ * Ordre middleware important :
+ * 1) CORS pour autoriser l'UI locale
+ * 2) JSON parser pour req.body
+ * 3) logger HTTP pour tracer toutes les routes
+ */
 app.use(cors());
 app.use(express.json());
 app.use(logger.morganMiddleware());
@@ -24,7 +29,11 @@ app.listen(PORT, () => {
     logger.systemStart(`Serveur demarre sur :${PORT}`);
 });
 
-/* --- Arret propre --- */
+/*
+ * Arret propre: utile en dev (Ctrl+C) et en execution conteneurisee.
+ * Ici aucun pool DB n'est ouvert, mais ce hook centralise les logs
+ * et simplifie une extension future (fermeture de ressources).
+ */
 process.on('SIGINT', () => {
     logger.systemStop('Arret du serveur (SIGINT)');
     process.exit(0);

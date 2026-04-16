@@ -40,6 +40,19 @@ Projet-Gymshark---Sync/
 └── README.md
 ```
 
+## Documentation du code
+
+Pour comprendre rapidement l'architecture et les principaux flux techniques:
+
+- Voir [docs/guide-technique.md](docs/guide-technique.md)
+
+Ce guide couvre:
+
+- le role de chaque module backend/frontend,
+- le flux de chat en streaming SSE,
+- la persistance des conversations,
+- les points d'extension et de debug.
+
 ## Prérequis
 
 - **Node.js** >= 18 (pour le `fetch` natif) ou Node.js >= 14 avec `node-fetch` installé

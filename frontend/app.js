@@ -5,13 +5,26 @@
 
 'use strict';
 
+/** URL de base du backend Express. */
 const API_BASE = 'http://localhost:3000';
+
+/**
+ * Cles de stockage utilisees par le frontend.
+ * - conversationId: dernier fil actif (localStorage, persistant)
+ * - snapshot: etat visuel du chat (sessionStorage, session courante)
+ * - draft: brouillon de saisie (sessionStorage)
+ */
 const STORAGE_KEYS = {
     conversationId: 'currentConversationId',
     snapshot: 'chatConversationSnapshot',
     draft: 'chatDraftMessage',
 };
 
+/**
+ * Regroupe toutes les references DOM manipulees par l'application.
+ * Centraliser ces selecteurs simplifie la maintenance et evite de
+ * reparcourir le document dans chaque fonction.
+ */
 const dom = {
     root: document.documentElement,
     body: document.body,
@@ -56,6 +69,10 @@ const dom = {
 const initialConversationMarkup = dom.conversationFeed ? dom.conversationFeed.innerHTML : '';
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
+/**
+ * Etat global de l'interface.
+ * Ce store leger coordonne les vues, le streaming, l'audio et la saisie vocale.
+ */
 const state = {
     statusTimer: null,
     conversationId: localStorage.getItem(STORAGE_KEYS.conversationId) || null,
@@ -80,6 +97,10 @@ const state = {
     activeView: document.querySelector('.vue.vue-active')?.dataset.view || 'chat',
     viewSwitchTimer: null,
 };
+
+/* ============================================================
+   STOCKAGE CLIENT (session/local storage)
+   ============================================================ */
 
 function storageGet(key, fallback = null) {
     try {
@@ -114,6 +135,10 @@ function setConversationId(id) {
     }
     saveConversationSnapshot();
 }
+
+/* ============================================================
+    FEEDBACK UI (status + navigation + animations)
+    ============================================================ */
 
 function showStatus(message) {
     if (!dom.statusZone) return;
@@ -244,6 +269,10 @@ function setConversationMode(enabled) {
     dom.chatView.classList.toggle('est-en-conversation', enabled);
 }
 
+/* ============================================================
+    SAISIE UTILISATEUR (inputs + brouillons)
+    ============================================================ */
+
 function getActiveInput() {
     if (dom.secondaryInput && document.activeElement === dom.secondaryInput) {
         return dom.secondaryInput;
@@ -310,6 +339,10 @@ function resetConversation() {
     setConversationId(null);
     clearConversationSnapshot();
 }
+
+/* ============================================================
+    RENDU DES MESSAGES ET ACTIONS DE MESSAGE
+    ============================================================ */
 
 function setInputsDisabled(disabled) {
     for (const input of dom.textInputs) input.disabled = disabled;
@@ -592,6 +625,23 @@ function openEditMessageModal(originalContent, article, shell) {
     textarea.select();
 }
 
+/* ============================================================
+    TRANSPORT SSE (streaming de la reponse assistant)
+    ============================================================ */
+
+/**
+ * Lit le flux SSE renvoye par le backend et met a jour le message assistant
+ * au fil de l'eau.
+ *
+ * Le backend envoie :
+ * - des evenements meta avec conversationId
+ * - des fragments texte (data: ...)
+ * - un marqueur [DONE] de fin de flux
+ *
+ * @param {Response} response - Reponse fetch du POST /api/chat.
+ * @param {HTMLElement|null} assistantArticle - Message assistant a alimenter.
+ * @returns {Promise<string>} Reponse complete reconstruite.
+ */
 async function readSSEStream(response, assistantArticle) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -638,6 +688,16 @@ async function readSSEStream(response, assistantArticle) {
     return reply;
 }
 
+/**
+ * Orchestre un envoi de message complet :
+ * 1) verrouille les inputs
+ * 2) cree le placeholder assistant
+ * 3) lit le stream SSE et reconstruit la reponse
+ * 4) met a jour l'historique et l'etat d'UI
+ *
+ * @param {string} message - Prompt utilisateur a envoyer au backend.
+ * @param {string} successStatus - Message de statut a afficher en cas de succes.
+ */
 async function sendAndStream(message, successStatus) {
     state.isResponding = true;
     setInputsDisabled(true);
@@ -679,6 +739,11 @@ async function sendAndStream(message, successStatus) {
     }
 }
 
+/**
+ * Point d'entree principal de l'envoi depuis l'UI (bouton ou touche Enter).
+ *
+ * @param {Event} [event] - Evenement DOM optionnel.
+ */
 async function sendMessage(event) {
     if (event) event.preventDefault();
     if (state.isResponding) return;
@@ -710,6 +775,10 @@ async function sendMessage(event) {
     await sendAndStream(text, 'Réponse reçue.');
     dom.secondaryInput?.focus();
 }
+
+/* ============================================================
+    HISTORIQUE DES CONVERSATIONS (sidebar)
+    ============================================================ */
 
 function createHistoryDeleteButton(conversation) {
     return createIconActionButton(
@@ -784,6 +853,10 @@ function createHistoryItem(conversation) {
     return button;
 }
 
+/**
+ * Recharge la liste des conversations depuis le backend puis reconstruit
+ * la sidebar historique.
+ */
 async function refreshHistory() {
     if (!dom.historyList) return;
 
@@ -806,6 +879,11 @@ async function refreshHistory() {
     }
 }
 
+/**
+ * Charge une conversation complete puis reconstruit le fil de messages.
+ *
+ * @param {string} id - Identifiant de conversation a charger.
+ */
 async function loadConversation(id) {
     stopSpeechInput(true);
 
@@ -831,6 +909,10 @@ async function loadConversation(id) {
         showStatus('Erreur lors du chargement.');
     }
 }
+
+/* ============================================================
+    DIAGNOSTIC AUDIO (micro + haut-parleurs)
+    ============================================================ */
 
 function setAudioMeter(bar, label, value, prefix) {
     const safeValue = Math.max(0, Math.min(100, Math.round(value)));
@@ -959,6 +1041,9 @@ async function prepareAudioDevices() {
     }
 }
 
+/**
+ * Lance/arrete un test micro temps reel en mesurant le niveau RMS.
+ */
 async function toggleMicTest() {
     if (state.micTestActive) {
         stopMicTest();
@@ -1050,6 +1135,10 @@ async function playSpeakerTest() {
     }
 }
 
+/* ============================================================
+    SAISIE VOCALE (Web Speech API)
+    ============================================================ */
+
 function updateMicButtons(active) {
     for (const button of dom.micButtons) {
         button.classList.toggle('est-en-ecoute', active);
@@ -1096,6 +1185,13 @@ function getSpeechErrorMessage(code) {
     return 'La saisie vocale a rencontré un problème.';
 }
 
+/**
+ * Initialise (lazy) l'instance SpeechRecognition et ses handlers.
+ * La logique de restart permet une dictee continue tant que l'utilisateur
+ * n'interrompt pas explicitement la capture.
+ *
+ * @returns {SpeechRecognition|null}
+ */
 function ensureSpeechRecognition() {
     if (!SpeechRecognitionAPI) return null;
     if (state.speechRecognition) return state.speechRecognition;
@@ -1220,6 +1316,10 @@ function toggleSpeechInput() {
     }
 }
 
+/* ============================================================
+    MODALE AUDIO + INTERACTIONS VISUELLES
+    ============================================================ */
+
 function openAudioModal() {
     if (!dom.audioModal || state.audioModalOpen) return;
     state.lastFocusedElement = document.activeElement;
@@ -1301,6 +1401,10 @@ function initAnimations() {
         );
     }
 }
+
+/* ============================================================
+    BINDINGS D'EVENEMENTS ET BOOTSTRAP APPLICATION
+    ============================================================ */
 
 function bindGlobalEvents() {
     for (const button of dom.interactiveButtons) {
@@ -1430,6 +1534,10 @@ function bindInputs() {
 }
 
 function initPage() {
+    // Ordre d'initialisation important:
+    // 1) animation/layout
+    // 2) bindings evenements
+    // 3) restauration d'etat session (snapshot, draft, conversation active)
     initAnimations();
     bindGlobalEvents();
     bindNavigation();
