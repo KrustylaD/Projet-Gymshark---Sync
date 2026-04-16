@@ -147,16 +147,16 @@ Ports personnalisables via variables d'environnement :
 
 ## Routes API
 
-| Méthode  | Endpoint                 | Description                                    |
-| -------- | ------------------------ | ---------------------------------------------- |
-| `POST`   | `/api/chat`              | Envoie un message et streame la réponse SSE    |
-| `GET`    | `/api/conversations`     | Liste les conversations (filtres `q` et `limit`) |
-| `GET`    | `/api/conversations/:id` | Récupère une conversation complète par ID      |
-| `PATCH`  | `/api/conversations/:id` | Renomme une conversation (`{ title }`)         |
+| Méthode  | Endpoint                          | Description                                               |
+| -------- | --------------------------------- | --------------------------------------------------------- |
+| `POST`   | `/api/chat`                       | Envoie un message et streame la réponse SSE               |
+| `GET`    | `/api/conversations`              | Liste les conversations (filtres `q` et `limit`)          |
+| `GET`    | `/api/conversations/:id`          | Récupère une conversation complète par ID                 |
+| `PATCH`  | `/api/conversations/:id`          | Renomme une conversation (`{ title }`)                    |
 | `PUT`    | `/api/conversations/:id/messages` | Remplace les messages d'une conversation (`{ messages }`) |
-| `DELETE` | `/api/conversations/:id` | Supprime une conversation                      |
-| `GET`    | `/api/llm/health`        | Health check du serveur Ollama                 |
-| `GET`    | `/api/test-stream`       | Test de streaming SSE avec un prompt simple    |
+| `DELETE` | `/api/conversations/:id`          | Supprime une conversation                                 |
+| `GET`    | `/api/llm/health`                 | Health check du serveur Ollama                            |
+| `GET`    | `/api/test-stream`                | Test de streaming SSE avec un prompt simple               |
 
 ### Format du body `POST /api/chat`
 
