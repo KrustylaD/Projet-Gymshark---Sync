@@ -953,7 +953,7 @@ function stopMicTest() {
     }
 
     if (state.micContext) {
-        state.micContext.close().catch(() => {});
+        state.micContext.close().catch(() => { });
         state.micContext = null;
     }
 
@@ -1448,8 +1448,8 @@ function bindNavigation() {
             }
 
             if (target) {
-            activateView(target);
-            showStatus(`Vue active : ${target}`);
+                activateView(target);
+                showStatus(`Vue active : ${target}`);
             }
 
             if (prompt) injectPrompt(prompt);
