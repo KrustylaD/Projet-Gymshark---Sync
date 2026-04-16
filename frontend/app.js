@@ -226,6 +226,35 @@ function animateViewEntrance(view) {
     }
 }
 
+function animateElementBatch(elements, { delayStep = 34, duration = 560 } = {}) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    for (const [index, element] of elements.entries()) {
+        if (!(element instanceof HTMLElement)) continue;
+
+        element.animate(
+            [
+                {
+                    opacity: 0,
+                    transform: 'translateY(18px) scale(0.985)',
+                    filter: 'blur(10px)',
+                },
+                {
+                    opacity: 1,
+                    transform: 'translateY(0) scale(1)',
+                    filter: 'blur(0)',
+                },
+            ],
+            {
+                duration,
+                delay: Math.min(index * delayStep, 180),
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'both',
+            }
+        );
+    }
+}
+
 function activateView(viewName, { immediate = false } = {}) {
     const nextView = Array.from(dom.views).find((view) => view.dataset.view === viewName);
     if (!nextView) return;
@@ -1140,13 +1169,20 @@ async function refreshHistory() {
 
         dom.historyList.innerHTML = '';
         if (!conversations.length) {
-            dom.historyList.append(createEmptyHistoryState());
+            const emptyState = createEmptyHistoryState();
+            dom.historyList.append(emptyState);
+            animateElementBatch([emptyState], { delayStep: 0, duration: 420 });
             return;
         }
 
+        const historyNodes = [];
         for (const conversation of conversations) {
-            dom.historyList.append(createHistoryItem(conversation));
+            const item = createHistoryItem(conversation);
+            dom.historyList.append(item);
+            historyNodes.push(item);
         }
+
+        animateElementBatch(historyNodes, { delayStep: 28, duration: 460 });
     } catch {
         // Backend unavailable.
     }
