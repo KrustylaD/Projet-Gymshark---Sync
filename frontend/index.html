@@ -80,21 +80,21 @@
             </div>
 
             <nav class="navigation-sidebar" aria-label="Navigation principale">
-                <button class="bouton-lateral bouton-principal" data-view-target="chat">
+                <button class="bouton-lateral bouton-principal" data-view-target="chat" type="button">
                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M11 5H13V11H19V13H13V19H11V13H5V11H11V5Z"></path>
                     </svg>
                     <span>Nouveau chat</span>
                 </button>
 
-                <button class="bouton-lateral" data-view-target="search">
+                <button class="bouton-lateral" data-view-target="search" type="button">
                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M10 4C6.7 4 4 6.7 4 10C4 13.3 6.7 16 10 16C11.4 16 12.7 15.5 13.7 14.7L18 19L19 18L14.7 13.7C15.5 12.7 16 11.4 16 10C16 6.7 13.3 4 10 4ZM10 5.5C12.5 5.5 14.5 7.5 14.5 10C14.5 12.5 12.5 14.5 10 14.5C7.5 14.5 5.5 12.5 5.5 10C5.5 7.5 7.5 5.5 10 5.5Z"></path>
                     </svg>
                     <span>Rechercher</span>
                 </button>
 
-                <button class="bouton-lateral" data-view-target="shortcuts">
+                <button class="bouton-lateral" data-view-target="shortcuts" type="button">
                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M4 4H20V20H4V4ZM5.5 5.5V18.5H18.5V5.5H5.5Z"></path>
                     </svg>
@@ -116,7 +116,7 @@
                     <span>Paramètres audio</span>
                 </button>
 
-                <button class="aide-bouton" data-view-target="docs">
+                <button class="aide-bouton" data-view-target="docs" type="button">
                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M6 4H15L19 8V20H6V4ZM14 5.5V9H17.5L14 5.5ZM8 11H17V12.5H8V11ZM8 14H17V15.5H8V14ZM8 17H14V18.5H8V17Z"></path>
                     </svg>
@@ -127,10 +127,10 @@
 
         <main class="contenu-principal">
             <header class="entete">
-                <button class="bouton-dropdown" data-view-target="chat">Gymshark Sync <span class="fleche-dropdown">⌄</span></button>
+                <button class="bouton-dropdown" data-view-target="chat" type="button">Gymshark Sync <span class="fleche-dropdown">⌄</span></button>
 
                 <div class="actions-droite">
-                    <button class="action-top" aria-label="Partager" data-action="share">
+                    <button class="action-top" aria-label="Partager" data-action="share" type="button">
                         <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                             <path d="M12 4L16 8H13V14H11V8H8L12 4ZM6 14V18H18V14H20V20H4V14H6Z"></path>
                         </svg>
@@ -155,7 +155,7 @@
                     </section>
 
                     <section class="section-saisie">
-                        <div class="boite-saisie">
+                        <form class="boite-saisie" novalidate>
                             <div class="ligne-saisie-active" aria-hidden="true"></div>
                             <input type="text" class="champ-texte" placeholder="Envoyer un message à Gymshark Sync" aria-label="Votre message">
                             <div class="actions-saisie-gauche">
@@ -171,13 +171,13 @@
                                         <path d="M12 4.5C10.9 4.5 10 5.4 10 6.5V11C10 12.1 10.9 13 12 13C13.1 13 14 12.1 14 11V6.5C14 5.4 13.1 4.5 12 4.5ZM8.5 10.5H10V11C10 12.1 10.9 13 12 13C13.1 13 14 12.1 14 11V10.5H15.5V11C15.5 13 14.1 14.7 12.2 15V17.5H14.5V19H9.5V17.5H11.8V15C9.9 14.7 8.5 13 8.5 11V10.5Z"></path>
                                     </svg>
                                 </button>
-                                <button type="button" class="bouton-action bouton-envoyer" aria-label="Envoyer">
+                                <button type="submit" class="bouton-action bouton-envoyer" aria-label="Envoyer">
                                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                         <path d="M4 12L20 4L16 20L11.8 13.8L4 12Z"></path>
                                     </svg>
                                 </button>
                             </div>
-                        </div>
+                        </form>
 
                         <div class="suggestions-rapides">
                             <button type="button" class="suggestion">Résume ma journée</button>
@@ -212,7 +212,7 @@
 
                 <div class="barre-saisie-fixe">
                     <section class="section-saisie section-saisie-fixe">
-                        <div class="boite-saisie boite-saisie-secondaire">
+                        <form class="boite-saisie boite-saisie-secondaire" novalidate>
                             <div class="ligne-saisie-active" aria-hidden="true"></div>
                             <input type="text" class="champ-texte champ-texte-secondaire" placeholder="Envoyer un message à Gymshark Sync" aria-label="Votre message secondaire">
                             <div class="actions-saisie-gauche">
@@ -228,13 +228,13 @@
                                         <path d="M12 4.5C10.9 4.5 10 5.4 10 6.5V11C10 12.1 10.9 13 12 13C13.1 13 14 12.1 14 11V6.5C14 5.4 13.1 4.5 12 4.5ZM8.5 10.5H10V11C10 12.1 10.9 13 12 13C13.1 13 14 12.1 14 11V10.5H15.5V11C15.5 13 14.1 14.7 12.2 15V17.5H14.5V19H9.5V17.5H11.8V15C9.9 14.7 8.5 13 8.5 11V10.5Z"></path>
                                     </svg>
                                 </button>
-                                <button type="button" class="bouton-action bouton-envoyer bouton-envoyer-secondaire" aria-label="Envoyer">
+                                <button type="submit" class="bouton-action bouton-envoyer bouton-envoyer-secondaire" aria-label="Envoyer">
                                     <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                         <path d="M4 12L20 4L16 20L11.8 13.8L4 12Z"></path>
                                     </svg>
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </section>
                 </div>
             </section>
@@ -245,15 +245,15 @@
                     <p>Retrouvez rapidement une demande, un document ou une conversation récente.</p>
                 </div>
                 <div class="liste-elements">
-                    <button class="element-liste" data-view-target="chat" data-prompt="Retrouve la dernière version du compte-rendu produit.">
+                    <button class="element-liste" data-view-target="chat" data-prompt="Retrouve la dernière version du compte-rendu produit." type="button">
                         <strong>Compte-rendu produit</strong>
                         <span>Dernière mise à jour aujourd'hui</span>
                     </button>
-                    <button class="element-liste" data-view-target="docs">
+                    <button class="element-liste" data-view-target="docs" type="button">
                         <strong>Documentation interne</strong>
                         <span>Processus, guides et workflows</span>
                     </button>
-                    <button class="element-liste" data-view-target="chat" data-prompt="Montre-moi les tâches urgentes du support.">
+                    <button class="element-liste" data-view-target="chat" data-prompt="Montre-moi les tâches urgentes du support." type="button">
                         <strong>Tâches urgentes</strong>
                         <span>Filtrer les priorités du support</span>
                     </button>
@@ -266,15 +266,15 @@
                     <p>Lancez une action en un clic.</p>
                 </div>
                 <div class="grille-raccourcis">
-                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Rédige un message de suivi pour mon équipe.">
+                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Rédige un message de suivi pour mon équipe." type="button">
                         <strong>Rédiger un suivi</strong>
                         <span>Créer un message prêt à envoyer</span>
                     </button>
-                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Prépare une liste de priorités pour demain.">
+                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Prépare une liste de priorités pour demain." type="button">
                         <strong>Priorités demain</strong>
                         <span>Classer les tâches de demain</span>
                     </button>
-                    <button class="element-liste carte-action" data-view-target="docs">
+                    <button class="element-liste carte-action" data-view-target="docs" type="button">
                         <strong>Ouvrir la documentation</strong>
                         <span>Accéder aux guides et procédures</span>
                     </button>

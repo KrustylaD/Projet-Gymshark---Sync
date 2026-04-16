@@ -9,7 +9,7 @@ const logger = require('../logger');
 
 const ollamaBaseUrl = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
 const API_URL = ollamaBaseUrl + '/api/generate';
-const MODEL = process.env.OLLAMA_MODEL || 'llama3';
+const MODEL = process.env.OLLAMA_MODEL  ;
 
 /* --- Resolution du fetch (Node 18+ natif ou node-fetch en fallback) --- */
 let fetchFn = global.fetch;
@@ -22,7 +22,7 @@ if (!fetchFn) {
     }
 }
 
-/**
+/** 
  * Extrait la portion de texte lisible d'une ligne brute recue
  * depuis le stream Ollama (SSE / JSON / texte brut).
  * Conserve les espaces significatifs entre les mots.
