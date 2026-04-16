@@ -63,18 +63,58 @@ function Wait-Port {
     $attempts = $TimeoutSeconds * 2
     for ($i = 0; $i -lt $attempts; $i++) {
         if (Test-PortOpen -HostName $HostName -Port $Port) {
-            Write-Host "[OK] $Label disponible sur $HostName:$Port"
+            Write-Host "[OK] $Label disponible sur ${HostName}:$Port"
             return
         }
         Start-Sleep -Milliseconds 500
     }
 
-    throw "[ERREUR] Timeout: $Label n'est pas disponible sur $HostName:$Port"
+    throw "[ERREUR] Timeout: $Label n'est pas disponible sur ${HostName}:$Port"
 }
 
 function Register-StartedProcess {
     param([Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process)
     $script:StartedProcesses += $Process
+}
+
+function New-TempLogPair {
+    param([Parameter(Mandatory = $true)][string]$Prefix)
+
+    return @{
+        Out = Join-Path $env:TEMP "$Prefix.out.log"
+        Err = Join-Path $env:TEMP "$Prefix.err.log"
+    }
+}
+
+function Start-TrackedProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$LogPrefix
+    )
+
+    $logs = New-TempLogPair -Prefix $LogPrefix
+    $startProcessParams = @{
+        FilePath = $FilePath
+        ArgumentList = $ArgumentList
+        PassThru = $true
+        RedirectStandardOutput = $logs.Out
+        RedirectStandardError = $logs.Err
+    }
+
+    if ($WorkingDirectory) {
+        $startProcessParams.WorkingDirectory = $WorkingDirectory
+    }
+
+    $process = Start-Process @startProcessParams
+    Register-StartedProcess -Process $process
+
+    return @{
+        Process = $process
+        OutLog = $logs.Out
+        ErrLog = $logs.Err
+    }
 }
 
 function Stop-StartedProcesses {
@@ -98,7 +138,7 @@ function Stop-StartedProcesses {
 
 function Start-OllamaIfNeeded {
     if (Test-OllamaReady) {
-        Write-Host "[INFO] Ollama est deja actif sur $OllamaHost:$OllamaPort"
+        Write-Host "[INFO] Ollama est deja actif sur ${OllamaHost}:$OllamaPort"
         return
     }
 
@@ -106,12 +146,8 @@ function Start-OllamaIfNeeded {
         throw "[ERREUR] La commande 'ollama' est introuvable. Installe Ollama puis reessaye."
     }
 
-    $outLog = Join-Path $env:TEMP 'gymshark-ollama.out.log'
-    $errLog = Join-Path $env:TEMP 'gymshark-ollama.err.log'
-
     Write-Host '[INFO] Demarrage de Ollama...'
-    $process = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-    Register-StartedProcess -Process $process
+    $launch = Start-TrackedProcess -FilePath 'ollama' -ArgumentList 'serve' -LogPrefix 'gymshark-ollama'
 
     for ($i = 0; $i -lt 20; $i++) {
         if (Test-OllamaReady) {
@@ -121,7 +157,7 @@ function Start-OllamaIfNeeded {
         Start-Sleep -Milliseconds 500
     }
 
-    throw "[ERREUR] Ollama ne repond pas. Consulte $outLog et $errLog"
+    throw "[ERREUR] Ollama ne repond pas. Consulte $($launch.OutLog) et $($launch.ErrLog)"
 }
 
 function Start-BackendIfNeeded {
@@ -149,12 +185,8 @@ function Start-BackendIfNeeded {
         }
     }
 
-    $outLog = Join-Path $env:TEMP 'gymshark-backend.out.log'
-    $errLog = Join-Path $env:TEMP 'gymshark-backend.err.log'
-
     Write-Host '[INFO] Demarrage du backend...'
-    $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'npm start' -WorkingDirectory $script:BackendDir -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-    Register-StartedProcess -Process $process
+    Start-TrackedProcess -FilePath 'cmd.exe' -ArgumentList '/c', 'npm start' -WorkingDirectory $script:BackendDir -LogPrefix 'gymshark-backend' | Out-Null
 
     Wait-Port -HostName '127.0.0.1' -Port $BackendPort -Label 'Backend' -TimeoutSeconds 20
 }
@@ -187,12 +219,8 @@ function Start-FrontendIfNeeded {
     $pythonArgs += 'http.server'
     $pythonArgs += "$FrontendPort"
 
-    $outLog = Join-Path $env:TEMP 'gymshark-frontend.out.log'
-    $errLog = Join-Path $env:TEMP 'gymshark-frontend.err.log'
-
     Write-Host '[INFO] Demarrage du serveur frontend...'
-    $process = Start-Process -FilePath $pythonBinary -ArgumentList $pythonArgs -WorkingDirectory $script:FrontendDir -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-    Register-StartedProcess -Process $process
+    Start-TrackedProcess -FilePath $pythonBinary -ArgumentList $pythonArgs -WorkingDirectory $script:FrontendDir -LogPrefix 'gymshark-frontend' | Out-Null
 
     Wait-Port -HostName '127.0.0.1' -Port $FrontendPort -Label 'Frontend' -TimeoutSeconds 20
 }

@@ -8,6 +8,8 @@ const logger = require('../logger');
  * (role, ton, comportements attendus).
  */
 const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
+let cachedPrompt = null;
+let cachedPromptMtimeMs = null;
 
 /**
  * Lit et renvoie le contenu du fichier system prompt.
@@ -18,9 +20,19 @@ const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
  */
 function getSystemPrompt() {
     try {
-        return fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
+        const stats = fs.statSync(SYSTEM_PROMPT_PATH);
+
+        if (cachedPrompt !== null && cachedPromptMtimeMs === stats.mtimeMs) {
+            return cachedPrompt;
+        }
+
+        cachedPrompt = fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
+        cachedPromptMtimeMs = stats.mtimeMs;
+        return cachedPrompt;
     } catch (error) {
         logger.warn(`Impossible de lire le system prompt: ${error.message}`, 'config/prompt.js');
+        cachedPrompt = '';
+        cachedPromptMtimeMs = null;
         return '';
     }
 }
