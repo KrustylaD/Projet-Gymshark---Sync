@@ -77,12 +77,13 @@ function getConversation(id) {
 function saveConversation(id, messages, title) {
     const all = loadAll();
     const existing = all[id];
+    const now = new Date().toISOString();
     all[id] = {
         id,
         title: title || (existing && existing.title) || extractTitle(messages),
         messages,
-        updatedAt: new Date().toISOString(),
-        createdAt: (existing && existing.createdAt) || new Date().toISOString(),
+        updatedAt: now,
+        createdAt: (existing && existing.createdAt) || now,
     };
     saveAll(all);
     logger.dbSuccess('SAVE', 'conversations', `Conversation ${id} sauvegardee (${messages.length} messages)`);

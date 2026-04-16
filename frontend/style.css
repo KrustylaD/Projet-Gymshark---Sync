@@ -560,14 +560,16 @@ body.page-chargee .contenu-principal {
 
 /* --- Effet de brillance au survol (sweep) --- */
 
-.bouton-lateral::before,
-.aide-bouton::before,
-.raccourci-action::before,
-.element-liste::before,
-.carte-action::before,
-.action-top::before,
-.suggestion::before,
-.bouton-action::before {
+:is(
+    .bouton-lateral,
+    .aide-bouton,
+    .raccourci-action,
+    .element-liste,
+    .carte-action,
+    .action-top,
+    .suggestion,
+    .bouton-action
+)::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -577,33 +579,29 @@ body.page-chargee .contenu-principal {
     pointer-events: none;
 }
 
-.bouton-lateral:hover::before,
-.aide-bouton:hover::before,
-.raccourci-action:hover::before,
-.element-liste:hover::before,
-.carte-action:hover::before,
-.action-top:hover::before,
-.suggestion:hover::before,
-.bouton-action:hover::before {
+:is(
+    .bouton-lateral,
+    .aide-bouton,
+    .raccourci-action,
+    .element-liste,
+    .carte-action,
+    .action-top,
+    .suggestion,
+    .bouton-action
+):hover::before {
     transform: translateX(120%);
 }
 
 /* --- Etats hover et actif --- */
 
-.bouton-lateral:hover,
-.aide-bouton:hover,
-.raccourci-action:hover,
-.element-liste:hover,
-.carte-action:hover {
+:is(.bouton-lateral, .aide-bouton, .raccourci-action, .element-liste, .carte-action):hover {
     background: var(--bg-hover);
     border-color: var(--border);
     transform: translateY(-1px);
     box-shadow: var(--shadow-soft);
 }
 
-.bouton-lateral:hover .icone-svg,
-.aide-bouton:hover .icone-svg,
-.action-top:hover .icone-svg {
+:is(.bouton-lateral, .aide-bouton, .action-top):hover .icone-svg {
     transform: scale(1.08);
 }
 
@@ -1816,15 +1814,17 @@ body.page-chargee .contenu-principal {
    ACCESSIBILITE (focus-visible)
    ============================================================ */
 
-.bouton-lateral:focus-visible,
-.aide-bouton:focus-visible,
-.bouton-dropdown:focus-visible,
-.action-top:focus-visible,
-.bouton-action:focus-visible,
-.suggestion:focus-visible,
-.raccourci-action:focus-visible,
-.element-liste:focus-visible,
-.carte-action:focus-visible {
+:is(
+    .bouton-lateral,
+    .aide-bouton,
+    .bouton-dropdown,
+    .action-top,
+    .bouton-action,
+    .suggestion,
+    .raccourci-action,
+    .element-liste,
+    .carte-action
+):focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.35);
     outline-offset: 2px;
 }

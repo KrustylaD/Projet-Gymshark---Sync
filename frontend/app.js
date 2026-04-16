@@ -383,6 +383,36 @@ function bindHoverActionBar(container, actionBar) {
     container.addEventListener('mouseleave', () => actionBar.classList.remove('est-visible'));
 }
 
+function copyTextToClipboard(getText) {
+    const text = typeof getText === 'function' ? getText() : getText;
+    navigator.clipboard.writeText(text || '')
+        .then(() => showStatus('Message copié.'))
+        .catch(() => showStatus('Erreur lors de la copie.'));
+}
+
+function buildMessageActionBar({ getCopyContent, onEdit } = {}) {
+    const actionBar = createMessageActionBar();
+    actionBar.append(
+        createIconActionButton('fa-regular fa-copy', 'Copier', () => copyTextToClipboard(getCopyContent))
+    );
+
+    if (typeof onEdit === 'function') {
+        actionBar.append(
+            createIconActionButton('fa-regular fa-pen-to-square', 'Modifier', onEdit)
+        );
+    }
+
+    return actionBar;
+}
+
+function mountConversationShell(shell, actionBar) {
+    shell.append(actionBar);
+    bindHoverActionBar(shell, actionBar);
+    dom.conversationFeed.append(shell);
+    scrollConversationToBottom();
+    saveConversationSnapshot();
+}
+
 function buildMessageShell(content, role) {
     const shell = document.createElement('div');
     shell.className = `message-shell message-shell-${role}`;
@@ -402,30 +432,14 @@ function buildMessageShell(content, role) {
 function appendMessage(content, role) {
     if (!dom.conversationFeed || !content) return null;
 
-    const { shell, article } = buildMessageShell(content, role);
-    const actionBar = createMessageActionBar();
-
-    actionBar.append(
-        createIconActionButton('fa-regular fa-copy', 'Copier', () => {
-            navigator.clipboard.writeText(content)
-                .then(() => showStatus('Message copié.'))
-                .catch(() => showStatus('Erreur lors de la copie.'));
-        })
-    );
-
-    if (role === 'utilisateur') {
-        actionBar.append(
-            createIconActionButton('fa-regular fa-pen-to-square', 'Modifier', () => {
-                openEditMessageModal(content, article, shell);
-            })
-        );
-    }
-
-    shell.append(actionBar);
-    bindHoverActionBar(shell, actionBar);
-    dom.conversationFeed.append(shell);
-    scrollConversationToBottom();
-    saveConversationSnapshot();
+    const { shell, article, paragraph } = buildMessageShell(content, role);
+    const actionBar = buildMessageActionBar({
+        getCopyContent: () => paragraph.textContent || '',
+        onEdit: role === 'utilisateur'
+            ? () => openEditMessageModal(paragraph.textContent || '', article, shell)
+            : null,
+    });
+    mountConversationShell(shell, actionBar);
     return article;
 }
 
@@ -433,21 +447,10 @@ function createAssistantPlaceholder() {
     if (!dom.conversationFeed) return null;
 
     const { shell, article, paragraph } = buildMessageShell('', 'assistant');
-    const actionBar = createMessageActionBar();
-
-    actionBar.append(
-        createIconActionButton('fa-regular fa-copy', 'Copier', () => {
-            navigator.clipboard.writeText(paragraph.textContent || '')
-                .then(() => showStatus('Message copié.'))
-                .catch(() => showStatus('Erreur lors de la copie.'));
-        })
-    );
-
-    shell.append(actionBar);
-    bindHoverActionBar(shell, actionBar);
-    dom.conversationFeed.append(shell);
-    scrollConversationToBottom();
-    saveConversationSnapshot();
+    const actionBar = buildMessageActionBar({
+        getCopyContent: () => paragraph.textContent || '',
+    });
+    mountConversationShell(shell, actionBar);
     return article;
 }
 
@@ -514,6 +517,27 @@ function createModalCard(extraClass = '') {
     return card;
 }
 
+function createModalButton(label, variantClass) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `modale-bouton ${variantClass}`;
+    button.textContent = label;
+    return button;
+}
+
+function bindModalDismiss(backdrop, close) {
+    const onKeyDown = (event) => {
+        if (event.key === 'Escape') close();
+    };
+
+    backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop) close();
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+}
+
 function openConfirmModal({ title, message, confirmLabel = 'Confirmer', danger = false }) {
     return new Promise((resolve) => {
         const previousFocus = document.activeElement;
@@ -522,41 +546,30 @@ function openConfirmModal({ title, message, confirmLabel = 'Confirmer', danger =
         const titleNode = document.createElement('h3');
         const messageNode = document.createElement('p');
         const actions = document.createElement('div');
-        const cancelButton = document.createElement('button');
-        const confirmButton = document.createElement('button');
+        const cancelButton = createModalButton('Annuler', 'modale-bouton-secondaire');
+        const confirmButton = createModalButton(
+            confirmLabel,
+            danger ? 'modale-bouton-danger' : 'modale-bouton-primaire'
+        );
 
         titleNode.textContent = title;
         messageNode.textContent = message;
         actions.className = 'modale-actions';
 
-        cancelButton.type = 'button';
-        cancelButton.className = 'modale-bouton modale-bouton-secondaire';
-        cancelButton.textContent = 'Annuler';
-
-        confirmButton.type = 'button';
-        confirmButton.className = `modale-bouton ${danger ? 'modale-bouton-danger' : 'modale-bouton-primaire'}`;
-        confirmButton.textContent = confirmLabel;
-
         let settled = false;
+        let removeDismissHandlers = () => { };
         const close = (value) => {
             if (settled) return;
             settled = true;
-            document.removeEventListener('keydown', onKeyDown);
+            removeDismissHandlers();
             backdrop.remove();
             previousFocus?.focus?.();
             resolve(value);
         };
 
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') close(false);
-        };
-
-        backdrop.addEventListener('click', (event) => {
-            if (event.target === backdrop) close(false);
-        });
+        removeDismissHandlers = bindModalDismiss(backdrop, () => close(false));
         cancelButton.addEventListener('click', () => close(false));
         confirmButton.addEventListener('click', () => close(true));
-        document.addEventListener('keydown', onKeyDown);
 
         actions.append(cancelButton, confirmButton);
         card.append(titleNode, messageNode, actions);
@@ -573,31 +586,24 @@ function openEditMessageModal(originalContent, article, shell) {
     const title = document.createElement('h3');
     const textarea = document.createElement('textarea');
     const actions = document.createElement('div');
-    const cancelButton = document.createElement('button');
-    const saveButton = document.createElement('button');
+    const cancelButton = createModalButton('Annuler', 'modale-bouton-secondaire');
+    const saveButton = createModalButton('Valider et régénérer', 'modale-bouton-primaire');
 
     title.textContent = 'Modifier le message';
     textarea.className = 'modale-editor-textarea';
     textarea.value = originalContent;
 
     actions.className = 'modale-actions';
-    cancelButton.type = 'button';
-    cancelButton.className = 'modale-bouton modale-bouton-secondaire';
-    cancelButton.textContent = 'Annuler';
-
-    saveButton.type = 'button';
-    saveButton.className = 'modale-bouton modale-bouton-primaire';
-    saveButton.textContent = 'Valider et régénérer';
+    let removeDismissHandlers = () => { };
 
     const close = () => {
+        removeDismissHandlers();
         backdrop.remove();
         previousFocus?.focus?.();
     };
 
+    removeDismissHandlers = bindModalDismiss(backdrop, close);
     cancelButton.addEventListener('click', close);
-    backdrop.addEventListener('click', (event) => {
-        if (event.target === backdrop) close();
-    });
 
     saveButton.addEventListener('click', async () => {
         const nextContent = textarea.value.trim();
@@ -1440,24 +1446,48 @@ function bindGlobalEvents() {
     });
 }
 
+function handleViewTargetSource(source, { resetConversationOnPrimaryChat = false } = {}) {
+    stopSpeechInput(true);
+
+    const target = source.dataset.viewTarget;
+    const prompt = source.dataset.prompt;
+
+    if (resetConversationOnPrimaryChat && target === 'chat' && source.classList.contains('bouton-principal') && !prompt) {
+        resetConversation();
+    }
+
+    if (target) {
+        activateView(target);
+        showStatus(`Vue active : ${target}`);
+    }
+
+    if (prompt) injectPrompt(prompt);
+}
+
+function handleAppAction(action) {
+    if (action === 'share') {
+        showStatus('Lien de partage préparé.');
+        return;
+    }
+
+    if (action === 'attach') {
+        showStatus('Module d\'ajout prêt. Vous pouvez connecter un document ici.');
+        return;
+    }
+
+    if (action === 'voice') {
+        toggleSpeechInput();
+        return;
+    }
+
+    if (action === 'audio-settings') {
+        openAudioModal();
+    }
+}
+
 function bindNavigation() {
     for (const button of dom.navButtons) {
-        button.addEventListener('click', () => {
-            stopSpeechInput(true);
-            const target = button.dataset.viewTarget;
-            const prompt = button.dataset.prompt;
-
-            if (target === 'chat' && button.classList.contains('bouton-principal') && !prompt) {
-                resetConversation();
-            }
-
-            if (target) {
-                activateView(target);
-                showStatus(`Vue active : ${target}`);
-            }
-
-            if (prompt) injectPrompt(prompt);
-        });
+        button.addEventListener('click', () => handleViewTargetSource(button, { resetConversationOnPrimaryChat: true }));
     }
 
     for (const suggestion of dom.suggestions) {
@@ -1465,25 +1495,11 @@ function bindNavigation() {
     }
 
     for (const card of dom.actionCards) {
-        card.addEventListener('click', () => {
-            const target = card.dataset.viewTarget;
-            const prompt = card.dataset.prompt;
-            if (target) {
-                activateView(target);
-                showStatus(`Vue active : ${target}`);
-            }
-            if (prompt) injectPrompt(prompt);
-        });
+        card.addEventListener('click', () => handleViewTargetSource(card));
     }
 
     for (const button of dom.actionButtons) {
-        button.addEventListener('click', () => {
-            const action = button.dataset.action;
-            if (action === 'share') showStatus('Lien de partage préparé.');
-            if (action === 'attach') showStatus('Module d\'ajout prêt. Vous pouvez connecter un document ici.');
-            if (action === 'voice') toggleSpeechInput();
-            if (action === 'audio-settings') openAudioModal();
-        });
+        button.addEventListener('click', () => handleAppAction(button.dataset.action));
     }
 }
 

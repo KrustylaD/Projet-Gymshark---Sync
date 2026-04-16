@@ -13,33 +13,6 @@ const MAX_HISTORY_TURNS = 8;
    ============================================================ */
 
 /**
- * Normalise un fragment brut recu depuis Ollama en extrayant
- * uniquement la partie texte lisible.
- *
- * @param {*} chunk - Fragment brut (string, Buffer, JSON...).
- * @returns {string} Texte extrait, ou chaine vide.
- */
-function normalizeChunk(chunk) {
-    let value = String(chunk || '');
-    if (value === '') return '';
-
-    // Supprime le prefixe SSE "data:" eventuel
-    if (/^\s*data:\s*/.test(value)) value = value.replace(/^\s*data:\s*/, '');
-    if (value.trim() === '[DONE]') return '';
-
-    try {
-        const parsed = JSON.parse(value);
-        if (typeof parsed.response === 'string') return parsed.response;
-        if (parsed.message && typeof parsed.message.content === 'string') return parsed.message.content;
-        if (typeof parsed.output_text === 'string') return parsed.output_text;
-        if (typeof parsed.text === 'string') return parsed.text;
-        return '';
-    } catch (e) {
-        return value;
-    }
-}
-
-/**
  * Construit le prompt envoye au LLM en concatenant l'historique
  * des tours precedents et le nouveau message utilisateur.
  *
@@ -130,11 +103,10 @@ router.post('/api/chat', async (req, res) => {
             onChunk: (chunk) => {
                 try {
                     chunkCount++;
-                    const normalized = normalizeChunk(chunk);
-                    if (!normalized) return;
-                    assistantReply += normalized;
+                    if (!chunk) return;
+                    assistantReply += chunk;
                     // Echappe les retours a la ligne pour le format SSE
-                    const safe = normalized.replace(/\r?\n/g, '\\n');
+                    const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
                     logger.warn(`Erreur chunk: ${e.message}`, 'routes/chat.js');

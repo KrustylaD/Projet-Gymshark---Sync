@@ -29,17 +29,15 @@ app.listen(PORT, () => {
     logger.systemStart(`Serveur demarre sur :${PORT}`);
 });
 
+function handleShutdown(signal) {
+    logger.systemStop(`Arret du serveur (${signal})`);
+    process.exit(0);
+}
+
 /*
  * Arret propre: utile en dev (Ctrl+C) et en execution conteneurisee.
  * Ici aucun pool DB n'est ouvert, mais ce hook centralise les logs
  * et simplifie une extension future (fermeture de ressources).
  */
-process.on('SIGINT', () => {
-    logger.systemStop('Arret du serveur (SIGINT)');
-    process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-    logger.systemStop('Arret du serveur (SIGTERM)');
-    process.exit(0);
-});
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));

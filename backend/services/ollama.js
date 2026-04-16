@@ -9,7 +9,7 @@ const logger = require('../logger');
 
 const ollamaBaseUrl = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '');
 const API_URL = ollamaBaseUrl + '/api/generate';
-const MODEL = process.env.OLLAMA_MODEL  ;
+const MODEL = process.env.OLLAMA_MODEL || 'phi3:mini';
 
 /* --- Resolution du fetch (Node 18+ natif ou node-fetch en fallback) --- */
 let fetchFn = global.fetch;
@@ -68,6 +68,41 @@ function extractTextPiece(line) {
 }
 
 /**
+ * Cree un AbortController avec timeout optionnel.
+ * Le timer peut etre rearme a chaque fragment recu pour implementer
+ * un timeout d'inactivite.
+ *
+ * @param {number} timeoutMs
+ * @returns {{controller: AbortController, signal: AbortSignal, arm: Function, clear: Function}}
+ */
+function createAbortTimeout(timeoutMs) {
+    const controller = new AbortController();
+    const parsedTimeout = Number(timeoutMs);
+    const hasTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0;
+    let timeoutId;
+
+    const clear = () => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+        }
+    };
+
+    const arm = () => {
+        if (!hasTimeout) return;
+        clear();
+        timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
+    };
+
+    return {
+        controller,
+        signal: controller.signal,
+        arm,
+        clear,
+    };
+}
+
+/**
  * Envoie une requete en streaming vers /api/generate d'Ollama
  * et appelle `onChunk(text)` pour chaque fragment textuel recu.
  *
@@ -78,29 +113,10 @@ function extractTextPiece(line) {
  * @returns {Promise<string>} Le texte complet assemble une fois le flux termine.
  */
 async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
-    const controller = new AbortController();
-    const { signal } = controller;
+    const timeout = createAbortTimeout(timeoutMs);
+    const { signal } = timeout;
 
-    const parsedTimeout = Number(timeoutMs);
-    const hasTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0;
-    let timeoutId;
-
-    /** Arme (ou re-arme) le timer d'inactivite. */
-    const armTimeout = () => {
-        if (!hasTimeout) return;
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
-    };
-
-    /** Annule le timer d'inactivite en cours. */
-    const clearTimeoutIfNeeded = () => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = undefined;
-        }
-    };
-
-    armTimeout();
+    timeout.arm();
 
     /* --- Construction du payload --- */
     const systemPrompt = getSystemPrompt();
@@ -129,7 +145,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     });
 
     if (!res.ok) {
-        clearTimeoutIfNeeded();
+        timeout.clear();
         const txt = await res.text().catch(() => '');
         const err = new Error(`Ollama HTTP error: ${res.status} ${res.statusText} - ${txt}`);
         err.status = res.status;
@@ -148,7 +164,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     const emitPiece = (textPiece) => {
         if (!textPiece) return;
         result += textPiece;
-        armTimeout();
+        timeout.arm();
         if (typeof onChunk === 'function') {
             try {
                 onChunk(textPiece);
@@ -178,7 +194,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                armTimeout();
+                timeout.arm();
                 pending += decoder.decode(value, { stream: true });
 
                 const lines = pending.split(/\r?\n/);
@@ -210,7 +226,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
 
                 const onData = (chunk) => {
                     try {
-                        armTimeout();
+                        timeout.arm();
                         pending += decoder.decode(chunk, { stream: true });
                         const lines = pending.split(/\r?\n/);
                         pending = lines.pop() || '';
@@ -265,7 +281,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         }
         throw err;
     } finally {
-        clearTimeoutIfNeeded();
+        timeout.clear();
     }
 
     return result;
@@ -288,15 +304,10 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
         };
     }
 
-    const controller = new AbortController();
-    const { signal } = controller;
-    const parsedTimeout = Number(timeoutMs);
-    const hasTimeout = Number.isFinite(parsedTimeout) && parsedTimeout > 0;
-    let timeoutId;
+    const timeout = createAbortTimeout(timeoutMs);
+    const { signal } = timeout;
 
-    if (hasTimeout) {
-        timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
-    }
+    timeout.arm();
 
     try {
         const res = await fetchFn(`${ollamaBaseUrl}/api/tags`, {
@@ -336,7 +347,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
             error: err.name === 'AbortError' ? 'Health check timeout' : err.message,
         };
     } finally {
-        if (timeoutId) clearTimeout(timeoutId);
+        timeout.clear();
     }
 }
 
