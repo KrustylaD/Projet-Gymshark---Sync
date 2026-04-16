@@ -90,6 +90,39 @@ python3 -m http.server 8080
 # Puis ouvrir http://localhost:8080
 ```
 
+## Lancement automatise (Linux/macOS + Windows)
+
+Des scripts sont disponibles a la racine pour demarrer automatiquement :
+
+- Ollama (`ollama serve`) seulement si necessaire
+- Le backend (port `3000` par defaut)
+- Le frontend (port `8080` par defaut)
+
+### Linux / macOS
+
+```bash
+./start_project.sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start_project.ps1
+```
+
+### Windows (CMD)
+
+```bat
+start_project.bat
+```
+
+Ports personnalisables via variables d'environnement :
+
+- `OLLAMA_HOST`
+- `OLLAMA_PORT`
+- `BACKEND_PORT`
+- `FRONTEND_PORT`
+
 ## Variables d'environnement
 
 | Variable         | Description                                      | Valeur par défaut          |
