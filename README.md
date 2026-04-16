@@ -4,13 +4,13 @@ Assistant IA interne pour améliorer la productivité et la coordination en entr
 
 ## Stack technique
 
-| Composant        | Technologie                      |
-|------------------|----------------------------------|
-| **Frontend**     | HTML5, CSS3 (variables, grid, flexbox), JavaScript (vanilla ES2020+) |
-| **Backend**      | Node.js, Express 5.2             |
-| **LLM**          | Ollama (modèle `phi3:mini` par défaut) |
-| **Persistance**  | Fichier JSON (`data/conversations.json`) |
-| **Communication**| SSE (Server-Sent Events) pour le streaming des réponses |
+| Composant         | Technologie                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| **Frontend**      | HTML5, CSS3 (variables, grid, flexbox), JavaScript (vanilla ES2020+) |
+| **Backend**       | Node.js, Express 5.2                                                 |
+| **LLM**           | Ollama (modèle `phi3:mini` par défaut)                               |
+| **Persistance**   | Fichier JSON (`data/conversations.json`)                             |
+| **Communication** | SSE (Server-Sent Events) pour le streaming des réponses              |
 
 ## Structure du projet
 
@@ -125,23 +125,23 @@ Ports personnalisables via variables d'environnement :
 
 ## Variables d'environnement
 
-| Variable         | Description                                      | Valeur par défaut          |
-|------------------|--------------------------------------------------|----------------------------|
-| `OLLAMA_URL`     | URL du serveur Ollama                            | `http://localhost:11434`   |
-| `OLLAMA_MODEL`   | Nom du modèle LLM à utiliser                    | `phi3:mini`                |
-| `OLLAMA_TIMEOUT` | Timeout d'inactivité en ms (vide = désactivé)   | `60000`                    |
-| `PORT`           | Port du serveur Express                          | `3000`                     |
+| Variable         | Description                                   | Valeur par défaut        |
+| ---------------- | --------------------------------------------- | ------------------------ |
+| `OLLAMA_URL`     | URL du serveur Ollama                         | `http://localhost:11434` |
+| `OLLAMA_MODEL`   | Nom du modèle LLM à utiliser                  | `phi3:mini`              |
+| `OLLAMA_TIMEOUT` | Timeout d'inactivité en ms (vide = désactivé) | `60000`                  |
+| `PORT`           | Port du serveur Express                       | `3000`                   |
 
 ## Routes API
 
-| Méthode  | Endpoint                  | Description                                          |
-|----------|---------------------------|------------------------------------------------------|
-| `POST`   | `/api/chat`               | Envoie un message et streame la réponse SSE          |
-| `GET`    | `/api/conversations`      | Liste toutes les conversations (sans messages)       |
-| `GET`    | `/api/conversations/:id`  | Récupère une conversation complète par ID            |
-| `DELETE` | `/api/conversations/:id`  | Supprime une conversation                            |
-| `GET`    | `/api/llm/health`         | Health check du serveur Ollama                       |
-| `GET`    | `/api/test-stream`        | Test de streaming SSE avec un prompt simple          |
+| Méthode  | Endpoint                 | Description                                    |
+| -------- | ------------------------ | ---------------------------------------------- |
+| `POST`   | `/api/chat`              | Envoie un message et streame la réponse SSE    |
+| `GET`    | `/api/conversations`     | Liste toutes les conversations (sans messages) |
+| `GET`    | `/api/conversations/:id` | Récupère une conversation complète par ID      |
+| `DELETE` | `/api/conversations/:id` | Supprime une conversation                      |
+| `GET`    | `/api/llm/health`        | Health check du serveur Ollama                 |
+| `GET`    | `/api/test-stream`       | Test de streaming SSE avec un prompt simple    |
 
 ### Format du body `POST /api/chat`
 
