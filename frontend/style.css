@@ -654,6 +654,33 @@ body.page-chargee .contenu-principal {
     gap: 2px;
 }
 
+.boite-recherche-historique {
+    margin-bottom: 8px;
+}
+
+.champ-recherche-historique {
+    width: 100%;
+    min-height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-soft);
+    padding: 0 10px;
+    font: inherit;
+    font-size: var(--text-xs);
+    transition: border-color var(--dur-fast) var(--ease-smooth), box-shadow var(--dur-fast) var(--ease-smooth);
+}
+
+.champ-recherche-historique::placeholder {
+    color: var(--text-dim);
+}
+
+.champ-recherche-historique:focus {
+    outline: none;
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(151, 168, 255, 0.1);
+}
+
 .history-empty-state {
     display: grid;
     gap: 4px;
@@ -1452,19 +1479,44 @@ body.page-chargee .contenu-principal {
 .history-item {
     position: relative;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     width: 100%;
     gap: 8px;
+    padding: 10px 12px;
+    white-space: normal;
+}
+
+.history-item-details {
+    display: grid;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
 }
 
 .history-item-title {
-    flex: 1;
-    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
+}
+
+.history-item-preview {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+.history-item-meta {
+    font-size: 0.66rem;
+    color: rgba(159, 164, 183, 0.86);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }
 
 .history-item-actions {

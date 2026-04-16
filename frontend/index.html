@@ -104,6 +104,15 @@
 
             <section class="section-sidebar section-historique">
                 <h3>Historique</h3>
+                <div class="boite-recherche-historique">
+                    <input
+                        id="history-search-input"
+                        class="champ-recherche-historique"
+                        type="search"
+                        placeholder="Filtrer les conversations"
+                        aria-label="Filtrer les conversations"
+                    >
+                </div>
                 <div class="liste-historique">
                 </div>
             </section>
@@ -326,7 +335,7 @@
     </div>
 
     <div class="modale-overlay modale-overlay-audio" id="modale-audio" hidden>
-        <div class="modale-confirmation modale-audio" role="dialog" aria-modal="true" aria-labelledby="modale-audio-titre">
+        <div class="modale-confirmation modale-audio" aria-labelledby="modale-audio-titre">
             <div class="modale-audio-entete">
                 <div>
                     <h3 id="modale-audio-titre">Paramètres audio</h3>

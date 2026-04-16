@@ -53,6 +53,7 @@ const dom = {
     statusZone: document.querySelector('.zone-statut'),
     actionButtons: document.querySelectorAll('[data-action]'),
     historyList: document.querySelector('.liste-historique'),
+    historySearchInput: document.querySelector('#history-search-input'),
     audioModal: document.querySelector('#modale-audio'),
     closeAudioModalButton: document.querySelector('#bouton-fermer-modale-audio'),
     audioInputSelect: document.querySelector('#select-audio-input'),
@@ -97,6 +98,8 @@ const state = {
     lastFocusedElement: null,
     activeView: document.querySelector('.vue.vue-active')?.dataset.view || 'chat',
     viewSwitchTimer: null,
+    historyFilter: '',
+    historyRefreshTimer: null,
 };
 
 /* ============================================================
@@ -339,6 +342,7 @@ function resetConversation() {
     syncAllInputs('');
     setConversationId(null);
     clearConversationSnapshot();
+    refreshHistory();
 }
 
 /* ============================================================
@@ -566,6 +570,117 @@ function openConfirmModal({ title, message, confirmLabel = 'Confirmer', danger =
     });
 }
 
+function openTextEditModal({
+    title,
+    initialValue = '',
+    placeholder = '',
+    confirmLabel = 'Enregistrer',
+}) {
+    return new Promise((resolve) => {
+        const previousFocus = document.activeElement;
+        const backdrop = createModalBackdrop('modale-overlay-editor');
+        const card = createModalCard('modale-editor');
+        const titleNode = document.createElement('h3');
+        const input = document.createElement('input');
+        const actions = document.createElement('div');
+        const cancelButton = document.createElement('button');
+        const confirmButton = document.createElement('button');
+
+        titleNode.textContent = title;
+
+        input.type = 'text';
+        input.className = 'modale-editor-input';
+        input.value = initialValue;
+        input.placeholder = placeholder;
+        input.maxLength = 80;
+
+        actions.className = 'modale-actions';
+
+        cancelButton.type = 'button';
+        cancelButton.className = 'modale-bouton modale-bouton-secondaire';
+        cancelButton.textContent = 'Annuler';
+
+        confirmButton.type = 'button';
+        confirmButton.className = 'modale-bouton modale-bouton-primaire';
+        confirmButton.textContent = confirmLabel;
+
+        let settled = false;
+
+        const close = (value) => {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', onKeyDown);
+            backdrop.remove();
+            previousFocus?.focus?.();
+            resolve(value);
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                close(null);
+                return;
+            }
+
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const value = input.value.trim();
+                close(value || null);
+            }
+        };
+
+        const save = () => {
+            const value = input.value.trim();
+            close(value || null);
+        };
+
+        backdrop.addEventListener('click', (event) => {
+            if (event.target === backdrop) close(null);
+        });
+        cancelButton.addEventListener('click', () => close(null));
+        confirmButton.addEventListener('click', save);
+        document.addEventListener('keydown', onKeyDown);
+
+        actions.append(cancelButton, confirmButton);
+        card.append(titleNode, input, actions);
+        backdrop.append(card);
+        document.body.append(backdrop);
+
+        input.focus();
+        input.select();
+    });
+}
+
+async function syncConversationState() {
+    const messages = collectMessagesFromDom();
+    if (!messages.length) return true;
+
+    let conversationId = state.conversationId;
+    if (!conversationId) {
+        conversationId = `conv_${Date.now()}`;
+        setConversationId(conversationId);
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/messages`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Sync impossible (${response.status})`);
+        }
+
+        return true;
+    } catch (error) {
+        if (window.Logger) Logger.error(`Erreur sync conversation : ${error.message}`, 'app.js');
+        showStatus('Impossible de synchroniser l\'historique local avec le serveur.');
+        return false;
+    }
+}
+
 function openEditMessageModal(originalContent, article, shell) {
     const previousFocus = document.activeElement;
     const backdrop = createModalBackdrop('modale-overlay-editor');
@@ -600,6 +715,8 @@ function openEditMessageModal(originalContent, article, shell) {
     });
 
     saveButton.addEventListener('click', async () => {
+        if (state.isResponding) return;
+
         const nextContent = textarea.value.trim();
         if (!nextContent || nextContent === originalContent) {
             close();
@@ -607,15 +724,23 @@ function openEditMessageModal(originalContent, article, shell) {
         }
 
         close();
-        article.querySelector('p').textContent = nextContent;
 
-        const nextShell = shell.nextElementSibling;
-        if (nextShell?.querySelector('.message-assistant')) {
-            nextShell.remove();
+        // On repart de l'etat avant le message edite pour eviter les incoherences
+        // (edition d'un message ancien + réponses deja generees apres ce point).
+        let cursor = shell;
+        while (cursor) {
+            const next = cursor.nextElementSibling;
+            cursor.remove();
+            cursor = next;
         }
 
         saveConversationSnapshot();
+        const synced = await syncConversationState();
+        if (!synced) return;
+
+        appendMessage(nextContent, 'utilisateur');
         await sendAndStream(nextContent, 'Réponse régénérée.');
+        dom.secondaryInput?.focus();
     });
 
     actions.append(cancelButton, saveButton);
@@ -784,6 +909,46 @@ async function sendMessage(event) {
     HISTORIQUE DES CONVERSATIONS (sidebar)
     ============================================================ */
 
+function formatRelativeDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Date inconnue';
+
+    const diffMs = Date.now() - date.getTime();
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (diffMs < minute) return 'A l\'instant';
+    if (diffMs < hour) {
+        const minutes = Math.max(1, Math.round(diffMs / minute));
+        return `Il y a ${minutes} min`;
+    }
+    if (diffMs < day) {
+        const hours = Math.max(1, Math.round(diffMs / hour));
+        return `Il y a ${hours} h`;
+    }
+
+    return new Intl.DateTimeFormat('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+    }).format(date);
+}
+
+function formatMessageCount(count) {
+    const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    return `${safeCount} message${safeCount > 1 ? 's' : ''}`;
+}
+
+function buildConversationsEndpoint() {
+    const params = new URLSearchParams();
+    if (state.historyFilter.trim()) {
+        params.set('q', state.historyFilter.trim());
+    }
+    const query = params.toString();
+    return `${API_BASE}/api/conversations${query ? `?${query}` : ''}`;
+}
+
 function createHistoryDeleteButton(conversation) {
     return createIconActionButton(
         'fa-solid fa-trash',
@@ -821,6 +986,44 @@ function createHistoryDeleteButton(conversation) {
     );
 }
 
+function createHistoryRenameButton(conversation) {
+    return createIconActionButton(
+        'fa-regular fa-pen-to-square',
+        'Renommer',
+        async (event) => {
+            event.stopPropagation();
+
+            const nextTitle = await openTextEditModal({
+                title: 'Renommer la conversation',
+                initialValue: conversation.title || '',
+                placeholder: 'Titre de la conversation',
+                confirmLabel: 'Renommer',
+            });
+
+            if (!nextTitle || nextTitle === conversation.title) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/conversations/${conversation.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: nextTitle }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur serveur: ${response.status}`);
+                }
+
+                await refreshHistory();
+                showStatus('Conversation renommée.');
+            } catch (error) {
+                if (window.Logger) Logger.error(`Erreur renommage : ${error.message}`, 'app.js');
+                showStatus('Erreur lors du renommage.');
+            }
+        },
+        'history-action-button'
+    );
+}
+
 function createEmptyHistoryState() {
     const emptyState = document.createElement('div');
     const title = document.createElement('strong');
@@ -836,7 +1039,10 @@ function createEmptyHistoryState() {
 
 function createHistoryItem(conversation) {
     const button = document.createElement('button');
+    const details = document.createElement('div');
     const title = document.createElement('span');
+    const preview = document.createElement('span');
+    const meta = document.createElement('span');
     const actions = document.createElement('div');
 
     button.type = 'button';
@@ -846,12 +1052,26 @@ function createHistoryItem(conversation) {
         button.classList.add('est-actif');
     }
 
+    details.className = 'history-item-details';
+
     title.className = 'history-item-title';
     title.textContent = conversation.title;
-    actions.className = 'history-item-actions';
-    actions.append(createHistoryDeleteButton(conversation));
 
-    button.append(title, actions);
+    preview.className = 'history-item-preview';
+    preview.textContent = conversation.lastMessagePreview || 'Apercu indisponible';
+
+    meta.className = 'history-item-meta';
+    meta.textContent = `${formatRelativeDate(conversation.updatedAt)} • ${formatMessageCount(conversation.messageCount)}`;
+
+    actions.className = 'history-item-actions';
+    actions.append(
+        createHistoryRenameButton(conversation),
+        createHistoryDeleteButton(conversation)
+    );
+
+    details.append(title, preview, meta);
+
+    button.append(details, actions);
     bindHoverActionBar(button, actions);
     button.addEventListener('click', () => loadConversation(conversation.id));
     return button;
@@ -865,7 +1085,7 @@ async function refreshHistory() {
     if (!dom.historyList) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/conversations`);
+        const response = await fetch(buildConversationsEndpoint());
         if (!response.ok) return;
         const conversations = await response.json();
 
@@ -1487,6 +1707,22 @@ function bindNavigation() {
     }
 }
 
+function bindHistorySearch() {
+    if (!dom.historySearchInput) return;
+
+    dom.historySearchInput.addEventListener('input', () => {
+        state.historyFilter = dom.historySearchInput.value || '';
+
+        if (state.historyRefreshTimer) {
+            clearTimeout(state.historyRefreshTimer);
+        }
+
+        state.historyRefreshTimer = setTimeout(() => {
+            refreshHistory();
+        }, 180);
+    });
+}
+
 function bindAudioModal() {
     dom.closeAudioModalButton?.addEventListener('click', (event) => {
         event.preventDefault();
@@ -1545,6 +1781,7 @@ function initPage() {
     initAnimations();
     bindGlobalEvents();
     bindNavigation();
+    bindHistorySearch();
     bindAudioModal();
     bindInputs();
     syncInputBoxesState();

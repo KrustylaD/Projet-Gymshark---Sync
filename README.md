@@ -150,8 +150,10 @@ Ports personnalisables via variables d'environnement :
 | Méthode  | Endpoint                 | Description                                    |
 | -------- | ------------------------ | ---------------------------------------------- |
 | `POST`   | `/api/chat`              | Envoie un message et streame la réponse SSE    |
-| `GET`    | `/api/conversations`     | Liste toutes les conversations (sans messages) |
+| `GET`    | `/api/conversations`     | Liste les conversations (filtres `q` et `limit`) |
 | `GET`    | `/api/conversations/:id` | Récupère une conversation complète par ID      |
+| `PATCH`  | `/api/conversations/:id` | Renomme une conversation (`{ title }`)         |
+| `PUT`    | `/api/conversations/:id/messages` | Remplace les messages d'une conversation (`{ messages }`) |
 | `DELETE` | `/api/conversations/:id` | Supprime une conversation                      |
 | `GET`    | `/api/llm/health`        | Health check du serveur Ollama                 |
 | `GET`    | `/api/test-stream`       | Test de streaming SSE avec un prompt simple    |
@@ -171,6 +173,7 @@ Le `conversationId` est optionnel. S'il est omis, un nouvel ID est généré aut
 
 - **Chat en streaming** : Les réponses du LLM s'affichent en temps réel grâce au protocole SSE
 - **Historique des conversations** : Persistance sur disque, chargement et suppression depuis la sidebar
+- **Historique amélioré** : recherche, renommage et métadonnées (dernier message, nombre de messages)
 - **Édition de messages** : Possibilité de modifier un message utilisateur et de régénérer la réponse
 - **Suggestions rapides** : Prompts pré-définis pour démarrer rapidement une conversation
 - **Cartes d'action** : Synthèse, Organisation et Automatisation accessibles depuis l'accueil

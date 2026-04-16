@@ -1,6 +1,13 @@
 const express = require('express');
 const { generateOllamaResponse, getOllamaHealth } = require('../services/ollama');
-const { getConversation, saveConversation, deleteConversation, listConversations } = require('../services/history');
+const {
+    getConversation,
+    saveConversation,
+    replaceConversationMessages,
+    renameConversation,
+    deleteConversation,
+    listConversations,
+} = require('../services/history');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -96,9 +103,10 @@ function setupSSEHeaders(res) {
  */
 router.post('/api/chat', async (req, res) => {
     const { message, conversationId } = req.body || {};
-    logger.info(`Message recu: ${(message || '').slice(0, 50)}`);
+    const messageText = typeof message === 'string' ? message.trim() : '';
+    logger.info(`Message recu: ${messageText.slice(0, 50)}`);
 
-    if (!message) return res.status(400).json({ error: 'Missing message' });
+    if (!messageText) return res.status(400).json({ error: 'Missing message' });
 
     // Determiner ou creer l'identifiant de conversation
     const convId = typeof conversationId === 'string' && conversationId.trim()
@@ -108,7 +116,7 @@ router.post('/api/chat', async (req, res) => {
     // Charger l'historique existant depuis le fichier
     const saved = getConversation(convId);
     const history = saved ? saved.messages : [];
-    const prompt = buildPromptFromHistory(trimHistory(history), message);
+    const prompt = buildPromptFromHistory(trimHistory(history), messageText);
 
     // Timeout d'inactivite configurable via variable d'environnement
     const envTimeout = Number(process.env.OLLAMA_TIMEOUT);
@@ -151,7 +159,7 @@ router.post('/api/chat', async (req, res) => {
         // Sauvegarder l'historique complet sur disque
         const nextHistory = [
             ...history,
-            { role: 'user', content: message },
+            { role: 'user', content: messageText },
             { role: 'assistant', content: assistantReply.trim() },
         ];
         saveConversation(convId, nextHistory);
@@ -178,7 +186,9 @@ router.post('/api/chat', async (req, res) => {
  * triees par date de mise a jour decroissante.
  */
 router.get('/api/conversations', (req, res) => {
-    res.json(listConversations());
+    const query = typeof req.query.q === 'string' ? req.query.q : '';
+    const limit = req.query.limit;
+    res.json(listConversations({ query, limit }));
 });
 
 /**
@@ -189,6 +199,46 @@ router.get('/api/conversations/:id', (req, res) => {
     const conv = getConversation(req.params.id);
     if (!conv) return res.status(404).json({ error: 'Not found' });
     res.json(conv);
+});
+
+/**
+ * PATCH /api/conversations/:id
+ * Met a jour les metadonnees d'une conversation (actuellement: titre).
+ */
+router.patch('/api/conversations/:id', (req, res) => {
+    const title = typeof req.body?.title === 'string' ? req.body.title : '';
+    if (!title.trim()) {
+        return res.status(400).json({ error: 'Missing title' });
+    }
+
+    const updated = renameConversation(req.params.id, title);
+    if (!updated) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+
+    return res.json(updated);
+});
+
+/**
+ * PUT /api/conversations/:id/messages
+ * Remplace completement les messages d'une conversation.
+ * Utilise lors d'une edition/regeneration cote frontend.
+ */
+router.put('/api/conversations/:id/messages', (req, res) => {
+    const payloadMessages = req.body?.messages;
+    const payloadTitle = req.body?.title;
+
+    if (!Array.isArray(payloadMessages)) {
+        return res.status(400).json({ error: 'Missing messages array' });
+    }
+
+    try {
+        const updated = replaceConversationMessages(req.params.id, payloadMessages, payloadTitle);
+        return res.json(updated);
+    } catch (err) {
+        logger.warn(`Sync messages failed: ${err.message}`, 'routes/chat.js');
+        return res.status(400).json({ error: err.message || 'Invalid payload' });
+    }
 });
 
 /**
