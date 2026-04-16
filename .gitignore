@@ -1,6 +1,2 @@
-node_modules
-.env
-data/conversations.json
 conversations.json
-data/conversations.json
-/data/*.json
+node_modules//data/conversations.json
