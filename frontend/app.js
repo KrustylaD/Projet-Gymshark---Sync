@@ -43,6 +43,7 @@ const dom = {
     primarySendButton: document.querySelector('.bouton-envoyer'),
     secondarySendButton: document.querySelector('.bouton-envoyer-secondaire'),
     micButtons: document.querySelectorAll('.bouton-micro'),
+    messageForms: document.querySelectorAll('.boite-saisie'),
     inputBoxes: document.querySelectorAll('.boite-saisie'),
     primaryInputBox: document.querySelector('.boite-saisie'),
     secondaryInputBox: document.querySelector('.boite-saisie-secondaire'),
@@ -745,12 +746,15 @@ async function sendAndStream(message, successStatus) {
  * @param {Event} [event] - Evenement DOM optionnel.
  */
 async function sendMessage(event) {
-    if (event) event.preventDefault();
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     if (state.isResponding) return;
     stopSpeechInput(true);
 
     const activeInput = getActiveInput();
-    const activeButton = document.activeElement === dom.secondarySendButton
+    const activeButton = activeInput === dom.secondaryInput
         ? dom.secondarySendButton
         : dom.primarySendButton;
 
@@ -1516,8 +1520,8 @@ function bindAudioModal() {
 }
 
 function bindInputs() {
-    for (const button of dom.sendButtons) {
-        button.addEventListener('click', sendMessage);
+    for (const form of dom.messageForms) {
+        form.addEventListener('submit', sendMessage);
     }
 
     for (const input of dom.textInputs) {
@@ -1525,9 +1529,9 @@ function bindInputs() {
         input.addEventListener('focus', syncInputBoxesState);
         input.addEventListener('blur', syncInputBoxesState);
         input.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
                 event.preventDefault();
-                sendMessage();
+                input.closest('form')?.requestSubmit();
             }
         });
     }
