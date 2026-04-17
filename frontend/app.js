@@ -1007,7 +1007,6 @@ async function readSSEStream(response, assistantArticle) {
     const contentNode = assistantArticle?.querySelector('.message-body') || null;
     let reply = '';
     let buffer = '';
-    let hasRemovedLoadingClass = false;
 
     if (assistantArticle && contentNode) {
         setMessageContent(assistantArticle, contentNode, '', 'assistant');
@@ -1074,13 +1073,6 @@ async function readSSEStream(response, assistantArticle) {
         }
 
         if (assistantArticle && contentNode) {
-            if (!hasRemovedLoadingClass && reply.trim()) {
-                const messageShell = assistantArticle.parentElement;
-                if (messageShell) {
-                    messageShell.classList.remove('est-en-attente');
-                }
-                hasRemovedLoadingClass = true;
-            }
             setMessageContent(assistantArticle, contentNode, reply, 'assistant');
             scrollConversationToBottom();
             saveConversationSnapshot();
@@ -1123,21 +1115,8 @@ async function sendAndStream(message, successStatus) {
 
     const assistantArticle = createAssistantPlaceholder();
     const contentNode = assistantArticle?.querySelector('.message-body') || null;
-    const messageShell = assistantArticle?.parentElement;
     if (assistantArticle && contentNode) {
-        // Clear content and add typing dots
-        contentNode.innerHTML = '';
-        const dot1 = document.createElement('span');
-        dot1.className = 'typing-dot';
-        const dot2 = document.createElement('span');
-        dot2.className = 'typing-dot';
-        const dot3 = document.createElement('span');
-        dot3.className = 'typing-dot';
-        contentNode.append(dot1, dot2, dot3);
-        
-        if (messageShell) {
-            messageShell.classList.add('est-en-attente');
-        }
+        contentNode.innerHTML = '<span class="typing-indicator"><span></span><span></span><span></span></span>';
     }
 
     try {
@@ -1154,6 +1133,9 @@ async function sendAndStream(message, successStatus) {
             throw new Error(`Erreur serveur : ${response.status}`);
         }
 
+        // Attendre 2 secondes pour laisser les points de suspension visibles
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         const fullReply = await readSSEStream(response, assistantArticle);
         if (!fullReply && assistantArticle && contentNode) {
             setMessageContent(assistantArticle, contentNode, '(Pas de réponse du serveur)', 'assistant');
@@ -1164,10 +1146,6 @@ async function sendAndStream(message, successStatus) {
     } catch (error) {
         if (window.Logger) Logger.error(`Erreur chat : ${error.message}`, 'app.js');
         if (assistantArticle && contentNode) {
-            const messageShell = assistantArticle.parentElement;
-            if (messageShell) {
-                messageShell.classList.remove('est-en-attente');
-            }
             setMessageContent(
                 assistantArticle,
                 contentNode,
