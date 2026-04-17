@@ -5,6 +5,8 @@ const logger = require('./logger');
 
 /* ============================================================
    POINT D'ENTREE DU SERVEUR EXPRESS
+    Charge la configuration, applique les middlewares globaux,
+    monte les routes API puis demarre l'ecoute HTTP.
    ============================================================ */
 
 const app = express();
@@ -29,6 +31,11 @@ app.listen(PORT, () => {
     logger.systemStart(`Serveur demarre sur :${PORT}`);
 });
 
+/**
+ * Centralise l'arret propre de l'application.
+ *
+ * @param {string} signal - Signal systeme recu (ex: SIGINT, SIGTERM).
+ */
 function handleShutdown(signal) {
     logger.systemStop(`Arret du serveur (${signal})`);
     process.exit(0);

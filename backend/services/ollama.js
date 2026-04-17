@@ -15,6 +15,7 @@ const MODEL = process.env.OLLAMA_MODEL || 'phi3:mini';
 let fetchFn = global.fetch;
 if (!fetchFn) {
     try {
+        // Compatibilite Node < 18.
         fetchFn = require('node-fetch');
     } catch (e) {
         // fetch sera peut-etre disponible a l'execution ;
@@ -113,6 +114,7 @@ function createAbortTimeout(timeoutMs) {
  * @returns {Promise<string>} Le texte complet assemble une fois le flux termine.
  */
 async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
+    // Timeout de type "inactivite": re-arme tant que des donnees arrivent.
     const timeout = createAbortTimeout(timeoutMs);
     const { signal } = timeout;
 
@@ -122,6 +124,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     const systemPrompt = getSystemPrompt();
     const payload = {
         model: MODEL,
+        // Le system prompt est prefixe au prompt utilisateur quand disponible.
         prompt: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt,
         stream: true,
         num_predict: 400,
@@ -149,6 +152,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         const txt = await res.text().catch(() => '');
         const err = new Error(`Ollama HTTP error: ${res.status} ${res.statusText} - ${txt}`);
         err.status = res.status;
+        // Le log est tronque pour eviter de polluer la console avec un body trop long.
         logger.fatal(`Ollama HTTP ${res.status}: ${txt.slice(0, 100)}`, 'services/ollama.js');
         throw err;
     }
@@ -195,6 +199,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 timeout.arm();
+                // On assemble les fragments reseau jusqu'aux separateurs de lignes.
                 pending += decoder.decode(value, { stream: true });
 
                 const lines = pending.split(/\r?\n/);
@@ -227,6 +232,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
                 const onData = (chunk) => {
                     try {
                         timeout.arm();
+                        // Meme strategie d'assemblage que Web Streams, adaptee a node-fetch.
                         pending += decoder.decode(chunk, { stream: true });
                         const lines = pending.split(/\r?\n/);
                         pending = lines.pop() || '';
@@ -273,6 +279,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
             processChunkText(txt);
         }
     } catch (err) {
+        // Harmonise les erreurs d'abandon pour une gestion claire cote appelant.
         if (err.name === 'AbortError' || err.message === 'AbortError') {
             const e = new Error('Ollama request aborted (timeout)');
             e.cause = err;
@@ -296,6 +303,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
  */
 async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
     if (!fetchFn) {
+        // Renvoie un statut explicite pour aider le diagnostic d'environnement.
         return {
             ok: false,
             url: ollamaBaseUrl,
@@ -332,6 +340,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
             ? data.models.map((entry) => entry.name).filter(Boolean)
             : [];
 
+        // `modelAvailable` permet au front de detecter une config Ollama incomplete.
         return {
             ok: true,
             url: ollamaBaseUrl,

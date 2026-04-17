@@ -8,6 +8,9 @@ const logger = require('../logger');
  * (role, ton, comportements attendus).
  */
 const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
+
+// Cache memoire: evite de relire le fichier a chaque requete.
+// L'invalidation se fait via la date de modification (mtime).
 let cachedPrompt = null;
 let cachedPromptMtimeMs = null;
 
@@ -20,16 +23,20 @@ let cachedPromptMtimeMs = null;
  */
 function getSystemPrompt() {
     try {
+        // On lit d'abord les metadonnees pour savoir si le fichier a change.
         const stats = fs.statSync(SYSTEM_PROMPT_PATH);
 
+        // Si rien n'a change, on reutilise la valeur deja en memoire.
         if (cachedPrompt !== null && cachedPromptMtimeMs === stats.mtimeMs) {
             return cachedPrompt;
         }
 
+        // Rechargement du prompt depuis le disque puis mise a jour du cache.
         cachedPrompt = fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
         cachedPromptMtimeMs = stats.mtimeMs;
         return cachedPrompt;
     } catch (error) {
+        // Fallback defensif: le service continue de fonctionner sans system prompt.
         logger.warn(`Impossible de lire le system prompt: ${error.message}`, 'config/prompt.js');
         cachedPrompt = '';
         cachedPromptMtimeMs = null;

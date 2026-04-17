@@ -7,7 +7,10 @@ const morgan = require('morgan');
    Categories : HTTP, BDD, ERREUR, SYSTEM
    ============================================================ */
 
+// Separateur visuel commun entre les segments d'un meme log.
 const SEPARATOR = chalk.gray(' | ');
+
+// Prefixes visuels par categorie de log pour un scan rapide en terminal.
 const TAGS = {
     http: chalk.cyan('\u{1F4E1} HTTP  '),
     db: chalk.cyan('\u{1F5C3}\uFE0F  BDD  '),
@@ -19,6 +22,11 @@ const TAGS = {
     systemInfo: chalk.cyan('\u2705 SYSTEM'),
 };
 
+/**
+ * Formate l'heure courante en [HH:MM:SS] pour uniformiser les sorties.
+ *
+ * @returns {string}
+ */
 function timestamp() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2, '0');
@@ -27,6 +35,12 @@ function timestamp() {
     return `[${h}:${m}:${s}]`;
 }
 
+/**
+ * Colore la methode HTTP en fonction de son type.
+ *
+ * @param {string} method
+ * @returns {string}
+ */
 function colorMethod(method) {
     const upper = (method || '').toUpperCase().padEnd(6);
     switch (upper.trim()) {
@@ -43,6 +57,12 @@ function colorMethod(method) {
     }
 }
 
+/**
+ * Colore le code de statut HTTP selon sa gravite.
+ *
+ * @param {number} status
+ * @returns {string}
+ */
 function colorStatus(status) {
     const str = String(status);
     if (status >= 500) return chalk.red(str);
@@ -51,11 +71,25 @@ function colorStatus(status) {
     return chalk.white(str);
 }
 
+/**
+ * Construit le suffixe "fichier:ligne" quand l'information est disponible.
+ *
+ * @param {string} file
+ * @param {number|string} line
+ * @returns {string}
+ */
 function formatLocation(file, line) {
     if (!file) return '';
     return `${chalk.gray(file)}${line ? `:${line}` : ''}`;
 }
 
+/**
+ * Emet un log structure sans jamais faire planter le process.
+ *
+ * @param {'log'|'warn'|'error'} method - Methode console cible.
+ * @param {string} tag - Tag de categorie deja formate.
+ * @param {Array<string>} segments - Segments affiches apres le tag.
+ */
 function emit(method, tag, segments) {
     try {
         const output = typeof console[method] === 'function' ? console[method] : console.log;
@@ -67,6 +101,9 @@ function emit(method, tag, segments) {
     }
 }
 
+/**
+ * Log HTTP standardise (methode, route, statut, duree).
+ */
 function http(method, endpoint, status, durationMs) {
     emit('log', TAGS.http, [
         colorMethod(method),
@@ -76,6 +113,9 @@ function http(method, endpoint, status, durationMs) {
     ]);
 }
 
+/**
+ * Log de succes sur une operation de persistance.
+ */
 function dbSuccess(action, collection, result) {
     emit('log', TAGS.db, [
         chalk.green(action),
@@ -84,6 +124,9 @@ function dbSuccess(action, collection, result) {
     ]);
 }
 
+/**
+ * Log d'echec sur une operation de persistance.
+ */
 function dbError(action, collection, errorMsg) {
     emit('log', TAGS.db, [
         chalk.red(action),
@@ -92,10 +135,16 @@ function dbError(action, collection, errorMsg) {
     ]);
 }
 
+/**
+ * Log d'information technique liee a la couche "data".
+ */
 function dbConnection(message) {
     emit('log', TAGS.db, [chalk.cyan(message)]);
 }
 
+/**
+ * Log d'erreur critique.
+ */
 function fatal(message, file, line) {
     emit('error', TAGS.error, [
         chalk.red.bold(message),
@@ -103,6 +152,9 @@ function fatal(message, file, line) {
     ]);
 }
 
+/**
+ * Log d'avertissement non bloquant.
+ */
 function warn(message, file, line) {
     emit('warn', TAGS.warn, [
         chalk.yellow.bold(message),
@@ -110,22 +162,40 @@ function warn(message, file, line) {
     ]);
 }
 
+/**
+ * Log d'information applicative generale.
+ */
 function info(message) {
     emit('log', TAGS.info, [chalk.white(message)]);
 }
 
+/**
+ * Log standardise de demarrage de service.
+ */
 function systemStart(message) {
     emit('log', TAGS.systemStart, [chalk.green.bold(message)]);
 }
 
+/**
+ * Log standardise d'arret de service.
+ */
 function systemStop(message) {
     emit('log', TAGS.systemStop, [chalk.red.bold(message)]);
 }
 
+/**
+ * Log d'information systeme (etat, milestones techniques).
+ */
 function systemInfo(message) {
     emit('log', TAGS.systemInfo, [chalk.cyan(message)]);
 }
 
+/**
+ * Middleware Morgan connecte au logger maison.
+ * Retourne `null` pour eviter la sortie standard de Morgan.
+ *
+ * @returns {import('express').RequestHandler}
+ */
 function morganMiddleware() {
     return morgan((tokens, req, res) => {
         try {
@@ -141,6 +211,7 @@ function morganMiddleware() {
     });
 }
 
+// Expose l'API du logger pour les modules backend.
 module.exports = {
     http,
     dbSuccess,

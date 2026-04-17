@@ -68,9 +68,11 @@ function setupSSEHeaders(res) {
  * et streame la reponse du LLM via SSE.
  */
 router.post('/api/chat', async (req, res) => {
+    // Le front envoie un message utilisateur et eventuellement un id de conversation existant.
     const { message, conversationId } = req.body || {};
     logger.info(`Message recu: ${(message || '').slice(0, 50)}`);
 
+    // Validation minimale: sans message, impossible de solliciter le modele.
     if (!message) return res.status(400).json({ error: 'Missing message' });
 
     // Determiner ou creer l'identifiant de conversation
@@ -93,6 +95,7 @@ router.post('/api/chat', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
     logger.systemInfo('En attente de reponse Ollama...');
 
+    // `finished` protege contre les doubles terminaisons du flux SSE.
     let finished = false;
     let assistantReply = '';
     let chunkCount = 0;
@@ -105,7 +108,7 @@ router.post('/api/chat', async (req, res) => {
                     chunkCount++;
                     if (!chunk) return;
                     assistantReply += chunk;
-                    // Echappe les retours a la ligne pour le format SSE
+                    // Echappe les retours a la ligne pour garder un evenement SSE valide.
                     const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
@@ -120,7 +123,7 @@ router.post('/api/chat', async (req, res) => {
             finished = true;
         }
 
-        // Sauvegarder l'historique complet sur disque
+        // Sauvegarder l'historique complet (user + assistant) sur disque.
         const nextHistory = [
             ...history,
             { role: 'user', content: message },
@@ -130,6 +133,7 @@ router.post('/api/chat', async (req, res) => {
 
         res.end();
     } catch (err) {
+        // En cas d'erreur, on tente d'envoyer un evenement SSE d'erreur coherent.
         logger.fatal(`Error in /api/chat: ${err.message || err}`, 'routes/chat.js');
         if (!finished) {
             const msg = err && err.message ? err.message : 'LLM error';
@@ -150,6 +154,7 @@ router.post('/api/chat', async (req, res) => {
  * triees par date de mise a jour decroissante.
  */
 router.get('/api/conversations', (req, res) => {
+    // Renvoie une vue "liste" pour l'ecran d'historique du front.
     res.json(listConversations());
 });
 
@@ -160,6 +165,7 @@ router.get('/api/conversations', (req, res) => {
 router.get('/api/conversations/:id', (req, res) => {
     const conv = getConversation(req.params.id);
     if (!conv) return res.status(404).json({ error: 'Not found' });
+    // Renvoie toute la conversation, messages inclus.
     res.json(conv);
 });
 
@@ -170,6 +176,7 @@ router.get('/api/conversations/:id', (req, res) => {
 router.delete('/api/conversations/:id', (req, res) => {
     const deleted = deleteConversation(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Not found' });
+    // Signature de reponse volontairement simple pour le front.
     res.json({ ok: true });
 });
 
@@ -197,6 +204,7 @@ router.get('/api/test-stream', async (req, res) => {
     setupSSEHeaders(res);
 
     let chunkCount = 0;
+    // Prompt court pour verifier rapidement la chaine complete de streaming.
     const prompt = "Say hello in 5 words";
 
     try {

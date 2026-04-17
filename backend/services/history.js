@@ -28,11 +28,16 @@ function ensureDataDir() {
  */
 function loadAll() {
     ensureDataDir();
+
+    // Premiere execution: aucun historique encore cree.
     if (!fs.existsSync(HISTORY_FILE)) return {};
+
     try {
+        // Format attendu: objet indexe par conversationId.
         const data = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
         return data;
     } catch {
+        // Strategie defensive: ne pas bloquer l'application sur un JSON invalide.
         logger.dbError('READ', 'conversations.json', 'Fichier JSON corrompu, reinitialisation');
         return {};
     }
@@ -46,6 +51,7 @@ function loadAll() {
 function saveAll(data) {
     ensureDataDir();
     try {
+        // Ecriture pretty-print pour faciliter une inspection manuelle en dev.
         fs.writeFileSync(HISTORY_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
         logger.dbError('WRITE', 'conversations.json', err.message);
@@ -78,6 +84,8 @@ function saveConversation(id, messages, title) {
     const all = loadAll();
     const existing = all[id];
     const now = new Date().toISOString();
+
+    // Conserve createdAt d'origine en cas de mise a jour d'une conversation existante.
     all[id] = {
         id,
         title: title || (existing && existing.title) || extractTitle(messages),
@@ -113,6 +121,7 @@ function deleteConversation(id) {
 function listConversations() {
     const all = loadAll();
     const list = Object.values(all)
+        // On retire volontairement le tableau `messages` pour une reponse legere.
         .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }))
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     logger.dbSuccess('LIST', 'conversations', `${list.length} conversations`);
@@ -127,9 +136,11 @@ function listConversations() {
  * @returns {string} Titre genere.
  */
 function extractTitle(messages) {
+    // Le titre est base sur le premier message user pour rester representatif.
     const first = messages.find(m => m.role === 'user');
     if (!first) return 'Nouvelle conversation';
     const text = first.content.trim();
+    // Limite la longueur pour garder une UI lisible cote front.
     return text.length > 60 ? text.slice(0, 57) + '...' : text;
 }
 
