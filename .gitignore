@@ -1,3 +1,4 @@
 conversations.json
 node_modules/
 */.env
+*.log
