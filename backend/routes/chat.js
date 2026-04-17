@@ -5,7 +5,7 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-/** Nombre maximum de tours (paires user/assistant) conserves dans le prompt. */
+// Nombre maximum de tours (paires user/assistant) conserves dans le prompt.
 const MAX_HISTORY_TURNS = 8;
 
 /* ============================================================
@@ -13,18 +13,13 @@ const MAX_HISTORY_TURNS = 8;
    ============================================================ */
 
 /**
- * Construit le prompt envoye au LLM en concatenant l'historique
- * des tours precedents et le nouveau message utilisateur.
- *
- * @param {Array}  history     - Messages precedents { role, content }.
- * @param {string} userMessage - Dernier message de l'utilisateur.
- * @returns {string} Prompt formate.
+ * Construit le prompt envoye au LLM en concatenant l'historique et le message utilisateur.
  */
 function buildPromptFromHistory(history, userMessage) {
     const lines = [];
 
     for (const entry of history) {
-        if (!entry || !entry.content) continue;
+        if (entry === undefined || entry === null || entry.content === undefined) continue;
         const speaker = entry.role === 'assistant' ? 'Assistant' : 'Utilisateur';
         lines.push(`${speaker}: ${entry.content}`);
     }
@@ -36,9 +31,6 @@ function buildPromptFromHistory(history, userMessage) {
 
 /**
  * Tronque l'historique pour ne garder que les N derniers tours.
- *
- * @param {Array} history - Historique complet des messages.
- * @returns {Array} Historique tronque.
  */
 function trimHistory(history) {
     const maxMessages = MAX_HISTORY_TURNS * 2;
@@ -48,8 +40,6 @@ function trimHistory(history) {
 
 /**
  * Configure les headers SSE (Server-Sent Events) sur la reponse.
- *
- * @param {import('express').Response} res - Objet reponse Express.
  */
 function setupSSEHeaders(res) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -58,40 +48,84 @@ function setupSSEHeaders(res) {
     if (res.flushHeaders) res.flushHeaders();
 }
 
+/**
+ * Determine l'identifiant de conversation a utiliser.
+ * Utilise celui recu du client s'il est valide, sinon en genere un nouveau.
+ */
+function resolveConversationId(conversationId) {
+    if (typeof conversationId === 'string' && conversationId.trim() !== '') {
+        return conversationId.trim();
+    }
+    return `conv_${Date.now()}`;
+}
+
+/**
+ * Charge l'historique complet d'une conversation depuis le fichier.
+ * Retourne un tableau vide si la conversation n'existe pas encore.
+ */
+function loadConversationHistory(convId) {
+    const saved = getConversation(convId);
+    if (saved === undefined || saved === null) {
+        return [];
+    }
+    return saved.messages;
+}
+
+/**
+ * Ajoute le message utilisateur et la reponse assistant a l'historique, puis sauvegarde.
+ */
+function saveUpdatedHistory(convId, history, userMessage, assistantReply) {
+    const nextHistory = history.slice();
+    nextHistory.push({ role: 'user', content: userMessage });
+    nextHistory.push({ role: 'assistant', content: assistantReply.trim() });
+    saveConversation(convId, nextHistory);
+}
+
 /* ============================================================
    ROUTES API
    ============================================================ */
 
 /**
  * POST /api/chat
- * Route principale de chat. Recoit { message, conversationId }
- * et streame la reponse du LLM via SSE.
+ * Recoit { message, conversationId } et streame la reponse du LLM via SSE.
  */
 router.post('/api/chat', async (req, res) => {
-    // Le front envoie un message utilisateur et eventuellement un id de conversation existant.
-    const { message, conversationId } = req.body || {};
-    logger.info(`Message recu: ${(message || '').slice(0, 50)}`);
+    // Extraire le corps de la requete en securite.
+    const body = req.body;
+    let message;
+    let conversationId;
+    if (body !== undefined && body !== null) {
+        message = body.message;
+        conversationId = body.conversationId;
+    }
 
-    // Validation minimale: sans message, impossible de solliciter le modele.
-    if (!message) return res.status(400).json({ error: 'Missing message' });
+    // Construire un apercu du message pour les logs (sans exposer le contenu complet).
+    let messagePreview = '';
+    if (message !== undefined && message !== null) {
+        messagePreview = String(message).slice(0, 50);
+    }
+    logger.info(`Message recu: ${messagePreview}`);
 
-    // Determiner ou creer l'identifiant de conversation
-    const convId = typeof conversationId === 'string' && conversationId.trim()
-        ? conversationId.trim()
-        : `conv_${Date.now()}`;
+    // Sans message, impossible de solliciter le modele.
+    if (message === undefined || message === null || message === '') {
+        return res.status(400).json({ error: 'Missing message' });
+    }
 
-    // Charger l'historique existant depuis le fichier
-    const saved = getConversation(convId);
-    const history = saved ? saved.messages : [];
-    const prompt = buildPromptFromHistory(trimHistory(history), message);
+    const convId = resolveConversationId(conversationId);
+    const history = loadConversationHistory(convId);
+    const trimmedHistory = trimHistory(history);
+    const prompt = buildPromptFromHistory(trimmedHistory, message);
 
-    // Timeout d'inactivite configurable via variable d'environnement
+    // Timeout d'inactivite configurable via variable d'environnement.
     const envTimeout = Number(process.env.OLLAMA_TIMEOUT);
-    const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined;
+    let timeoutMs;
+    if (Number.isFinite(envTimeout) && envTimeout > 0) {
+        timeoutMs = envTimeout;
+    }
 
     setupSSEHeaders(res);
 
-    // Envoyer l'ID de conversation au client en premier evenement
+    // Envoyer l'identifiant de conversation au client en premier evenement.
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
     logger.systemInfo('En attente de reponse Ollama...');
 
@@ -106,9 +140,9 @@ router.post('/api/chat', async (req, res) => {
             onChunk: (chunk) => {
                 try {
                     chunkCount++;
-                    if (!chunk) return;
+                    if (chunk === undefined || chunk === null || chunk === '') return;
                     assistantReply += chunk;
-                    // Echappe les retours a la ligne pour garder un evenement SSE valide.
+                    // Echapper les retours a la ligne pour garder un evenement SSE valide.
                     const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
@@ -116,67 +150,68 @@ router.post('/api/chat', async (req, res) => {
                 }
             },
         });
+
         logger.systemInfo(`Reponse Ollama recue, chunks: ${chunkCount}`);
 
-        if (!finished) {
+        if (finished === false) {
             res.write('data: [DONE]\n\n');
             finished = true;
         }
 
-        // Sauvegarder l'historique complet (user + assistant) sur disque.
-        const nextHistory = [
-            ...history,
-            { role: 'user', content: message },
-            { role: 'assistant', content: assistantReply.trim() },
-        ];
-        saveConversation(convId, nextHistory);
-
+        // Sauvegarder l'echange complet (user + assistant) dans l'historique.
+        saveUpdatedHistory(convId, history, message, assistantReply);
         res.end();
+
     } catch (err) {
-        // En cas d'erreur, on tente d'envoyer un evenement SSE d'erreur coherent.
         logger.fatal(`Error in /api/chat: ${err.message || err}`, 'routes/chat.js');
-        if (!finished) {
-            const msg = err && err.message ? err.message : 'LLM error';
-            res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+
+        if (finished === false) {
+            let errorMessage = 'LLM error';
+            if (err !== undefined && err !== null && err.message !== undefined && err.message !== '') {
+                errorMessage = err.message;
+            }
+            res.write(`event: error\ndata: ${JSON.stringify({ message: errorMessage })}\n\n`);
             finished = true;
         }
+
         try {
             res.end();
         } catch (e) {
-            // noop
+            // noop : res.end() peut echouer si la connexion est deja fermee.
         }
     }
 });
 
 /**
  * GET /api/conversations
- * Retourne la liste de toutes les conversations (sans les messages),
+ * Retourne la liste de toutes les conversations sans leurs messages,
  * triees par date de mise a jour decroissante.
  */
 router.get('/api/conversations', (req, res) => {
-    // Renvoie une vue "liste" pour l'ecran d'historique du front.
     res.json(listConversations());
 });
 
 /**
  * GET /api/conversations/:id
- * Retourne une conversation complete (avec messages) par son ID.
+ * Retourne une conversation complete (avec messages) par son identifiant.
  */
 router.get('/api/conversations/:id', (req, res) => {
     const conv = getConversation(req.params.id);
-    if (!conv) return res.status(404).json({ error: 'Not found' });
-    // Renvoie toute la conversation, messages inclus.
+    if (conv === undefined || conv === null) {
+        return res.status(404).json({ error: 'Not found' });
+    }
     res.json(conv);
 });
 
 /**
  * DELETE /api/conversations/:id
- * Supprime une conversation par son ID.
+ * Supprime une conversation par son identifiant.
  */
 router.delete('/api/conversations/:id', (req, res) => {
     const deleted = deleteConversation(req.params.id);
-    if (!deleted) return res.status(404).json({ error: 'Not found' });
-    // Signature de reponse volontairement simple pour le front.
+    if (deleted === false) {
+        return res.status(404).json({ error: 'Not found' });
+    }
     res.json({ ok: true });
 });
 
@@ -186,18 +221,23 @@ router.delete('/api/conversations/:id', (req, res) => {
  */
 router.get('/api/llm/health', async (req, res) => {
     const health = await getOllamaHealth({ timeoutMs: 5000 });
-    if (!health.ok) {
-        logger.warn(`Ollama health check failed: ${health.error || 'unknown'}`, 'routes/chat.js');
+
+    if (health.ok === false) {
+        let healthError = 'unknown';
+        if (health.error !== undefined && health.error !== null && health.error !== '') {
+            healthError = health.error;
+        }
+        logger.warn(`Ollama health check failed: ${healthError}`, 'routes/chat.js');
         return res.status(503).json(health);
     }
+
     logger.systemInfo('Ollama health check OK');
     return res.status(200).json(health);
 });
 
 /**
  * GET /api/test-stream
- * Route de test pour verifier que le streaming SSE fonctionne
- * avec un prompt simple.
+ * Route de test pour verifier que le streaming SSE fonctionne avec un prompt simple.
  */
 router.get('/api/test-stream', async (req, res) => {
     logger.systemInfo('Debut du test streaming');

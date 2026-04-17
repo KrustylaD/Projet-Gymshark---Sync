@@ -85,14 +85,16 @@ function formatLocation(file, line) {
 
 /**
  * Emet un log structure sans jamais faire planter le process.
- *
- * @param {'log'|'warn'|'error'} method - Methode console cible.
- * @param {string} tag - Tag de categorie deja formate.
- * @param {Array<string>} segments - Segments affiches apres le tag.
+ * Utilise console.log comme fallback si la methode demandee n'existe pas.
  */
 function emit(method, tag, segments) {
     try {
-        const output = typeof console[method] === 'function' ? console[method] : console.log;
+        // Choisir la bonne methode console, avec fallback sur console.log.
+        let output = console.log;
+        if (typeof console[method] === 'function') {
+            output = console[method];
+        }
+
         const visibleSegments = segments.filter(Boolean);
         const suffix = visibleSegments.length ? `${SEPARATOR}${visibleSegments.join(SEPARATOR)}` : '';
         output.call(console, `${timestamp()} ${tag}${suffix}`);

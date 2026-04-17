@@ -2,41 +2,37 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../logger');
 
-/**
- * Chemin absolu vers le fichier contenant le system prompt.
- * Ce fichier definit les instructions de niveau systeme de l'assistant
- * (role, ton, comportements attendus).
- */
+// Chemin vers le fichier texte qui contient les instructions systeme du LLM.
 const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
 
-// Cache memoire: evite de relire le fichier a chaque requete.
-// L'invalidation se fait via la date de modification (mtime).
+// Cache memoire du prompt : evite de relire le fichier a chaque requete.
+// cachedPromptMtimeMs stocke la date de modification pour detecter les changements.
 let cachedPrompt = null;
 let cachedPromptMtimeMs = null;
 
 /**
- * Lit et renvoie le contenu du fichier system prompt.
- * En cas d'erreur de lecture, retourne une chaine vide
- * et logge l'erreur pour faciliter le debogage.
- *
- * @returns {string} Le texte du system prompt, ou chaine vide en cas d'erreur.
+ * Retourne le contenu du system prompt.
+ * Relit le fichier uniquement si son contenu a change depuis le dernier appel.
+ * Retourne une chaine vide si le fichier est illisible.
  */
 function getSystemPrompt() {
     try {
-        // On lit d'abord les metadonnees pour savoir si le fichier a change.
+        // Lire les metadonnees du fichier pour savoir s'il a ete modifie.
         const stats = fs.statSync(SYSTEM_PROMPT_PATH);
 
-        // Si rien n'a change, on reutilise la valeur deja en memoire.
-        if (cachedPrompt !== null && cachedPromptMtimeMs === stats.mtimeMs) {
+        // Le cache est encore valide : meme fichier, meme date de modification.
+        const cacheIsValid = cachedPrompt !== null && cachedPromptMtimeMs === stats.mtimeMs;
+        if (cacheIsValid) {
             return cachedPrompt;
         }
 
-        // Rechargement du prompt depuis le disque puis mise a jour du cache.
+        // Le fichier a change (ou premiere lecture) : recharger depuis le disque.
         cachedPrompt = fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf8').trim();
         cachedPromptMtimeMs = stats.mtimeMs;
         return cachedPrompt;
+
     } catch (error) {
-        // Fallback defensif: le service continue de fonctionner sans system prompt.
+        // Le fichier est absent ou illisible : on continue sans system prompt.
         logger.warn(`Impossible de lire le system prompt: ${error.message}`, 'config/prompt.js');
         cachedPrompt = '';
         cachedPromptMtimeMs = null;
