@@ -72,7 +72,7 @@ beforeEach(() => {
 
     // Valeurs par defaut des mocks de services pour chaque test.
     historyMock.getConversation.mockReturnValue(null);
-    historyMock.saveConversation.mockImplementation(() => {});
+    historyMock.saveConversation.mockImplementation(() => { });
     historyMock.listConversations.mockReturnValue([]);
     historyMock.deleteConversation.mockReturnValue(true);
 
