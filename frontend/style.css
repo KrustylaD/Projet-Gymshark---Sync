@@ -2549,6 +2549,52 @@ body.page-chargee .contenu-principal {
     100% { opacity: 1; }
 }
 
+@keyframes typing-bounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.7;
+    }
+    30% {
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}
+
+/* ============================================================
+   TYPING INDICATOR (Points de suspension rebondissants)
+   ============================================================ */
+
+.message-shell.est-en-attente .message-body {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.message-shell.est-en-attente .typing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--text-muted);
+    animation: typing-bounce 1.4s infinite;
+}
+
+.message-shell.est-en-attente .typing-dot:nth-child(1) {
+    animation-delay: 0ms;
+}
+
+.message-shell.est-en-attente .typing-dot:nth-child(2) {
+    animation-delay: 200ms;
+}
+
+.message-shell.est-en-attente .typing-dot:nth-child(3) {
+    animation-delay: 400ms;
+}
+
+.message-shell.est-en-attente .message-body > *:not(.typing-dot) {
+    display: none;
+}
+
 /* ============================================================
    RESPONSIVE
    ============================================================ */
