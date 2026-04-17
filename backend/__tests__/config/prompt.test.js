@@ -1,20 +1,31 @@
-// Mock fs avant tout require pour intercepter les appels disque.
-jest.mock('fs');
+import { jest } from '@jest/globals';
 
-// Mock le logger pour eviter le bruit dans la sortie des tests.
-jest.mock('../../logger', () => ({
+const fsMock = {
+    statSync: jest.fn(),
+    readFileSync: jest.fn(),
+};
+
+const loggerMock = {
     warn: jest.fn(),
+};
+
+jest.unstable_mockModule('fs', () => ({
+    default: fsMock,
+}));
+
+jest.unstable_mockModule('../../logger.js', () => ({
+    default: loggerMock,
 }));
 
 // -------------------------------------------------------------------
-// Utilitaire : re-require les modules apres un resetModules.
+// Utilitaire : re-import les modules apres un resetModules.
 // Necessaire car cachedPrompt et cachedPromptMtimeMs sont des variables
 // module-level : resetModules() est le seul moyen de les reinitialiser.
 // -------------------------------------------------------------------
-function freshRequire() {
-    const fs = require('fs');
-    const { getSystemPrompt } = require('../../config/prompt');
-    return { fs, getSystemPrompt };
+async function freshImport() {
+    jest.resetModules();
+    const { getSystemPrompt } = await import('../../config/prompt.js');
+    return { fs: fsMock, getSystemPrompt };
 }
 
 describe('getSystemPrompt', () => {
@@ -25,8 +36,8 @@ describe('getSystemPrompt', () => {
         jest.clearAllMocks();
     });
 
-    test('doit retourner le contenu du fichier system_prompt quand il est lisible', () => {
-        const { fs, getSystemPrompt } = freshRequire();
+    test('doit retourner le contenu du fichier system_prompt quand il est lisible', async () => {
+        const { fs, getSystemPrompt } = await freshImport();
 
         // Simuler un fichier avec une date de modification et un contenu.
         fs.statSync.mockReturnValue({ mtimeMs: 1000 });
@@ -38,8 +49,8 @@ describe('getSystemPrompt', () => {
         expect(result).toBe('Tu es SYNC');
     });
 
-    test('doit retourner une chaine vide si le fichier est absent', () => {
-        const { fs, getSystemPrompt } = freshRequire();
+    test('doit retourner une chaine vide si le fichier est absent', async () => {
+        const { fs, getSystemPrompt } = await freshImport();
 
         // Simuler une erreur de lecture (fichier introuvable).
         fs.statSync.mockImplementation(() => {
@@ -52,8 +63,8 @@ describe('getSystemPrompt', () => {
         expect(result).toBe('');
     });
 
-    test('doit utiliser le cache si le fichier n\'a pas change', () => {
-        const { fs, getSystemPrompt } = freshRequire();
+    test('doit utiliser le cache si le fichier n\'a pas change', async () => {
+        const { fs, getSystemPrompt } = await freshImport();
 
         fs.statSync.mockReturnValue({ mtimeMs: 1000 });
         fs.readFileSync.mockReturnValue('Contenu du prompt');
@@ -67,8 +78,8 @@ describe('getSystemPrompt', () => {
         expect(fs.readFileSync).toHaveBeenCalledTimes(1);
     });
 
-    test('doit recharger le fichier si la date de modification a change', () => {
-        const { fs, getSystemPrompt } = freshRequire();
+    test('doit recharger le fichier si la date de modification a change', async () => {
+        const { fs, getSystemPrompt } = await freshImport();
 
         // Premier appel : mtime = 1000, contenu = "Version 1".
         fs.statSync.mockReturnValueOnce({ mtimeMs: 1000 });

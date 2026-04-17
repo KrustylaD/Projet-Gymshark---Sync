@@ -1,5 +1,5 @@
-const { getSystemPrompt } = require('../config/prompt');
-const logger = require('../logger');
+import { getSystemPrompt } from '../config/prompt.js';
+import logger from '../logger.js';
 
 /* ============================================================
    SERVICE OLLAMA
@@ -23,13 +23,22 @@ if (MODEL === undefined || MODEL === null || MODEL === '') {
 }
 
 // Resolution du fetch : natif Node 18+, sinon node-fetch en fallback.
-let fetchFn = global.fetch;
-if (fetchFn === undefined || fetchFn === null) {
+let fetchFn = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null;
+
+async function ensureFetch() {
+    if (fetchFn) return fetchFn;
+
     try {
-        fetchFn = require('node-fetch');
-    } catch (e) {
-        // fetchFn restera undefined ; une erreur sera levee a l'utilisation si absent.
+        const nodeFetch = await import('node-fetch');
+        if (nodeFetch && typeof nodeFetch.default === 'function') {
+            fetchFn = nodeFetch.default;
+            return fetchFn;
+        }
+    } catch {
+        // Ignore dynamic import errors.
     }
+
+    return null;
 }
 
 /**
@@ -250,7 +259,8 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
  * Retourne le texte complet assemble une fois le flux termine.
  */
 async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
-    if (fetchFn === undefined || fetchFn === null) {
+    const resolvedFetch = await ensureFetch();
+    if (resolvedFetch === undefined || resolvedFetch === null) {
         throw new Error('No fetch implementation available. Install node-fetch or run on Node 18+');
     }
 
@@ -260,7 +270,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
 
     logger.systemInfo(`Requete Ollama → ${MODEL}`);
 
-    const res = await fetchFn(API_URL, {
+    const res = await resolvedFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream, text/plain, application/json' },
         body: JSON.stringify(payload),
@@ -334,7 +344,8 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
  * Retourne un objet { ok, url, model, ... } decrivant l'etat du serveur.
  */
 async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
-    if (fetchFn === undefined || fetchFn === null) {
+    const resolvedFetch = await ensureFetch();
+    if (resolvedFetch === undefined || resolvedFetch === null) {
         return {
             ok: false,
             url: ollamaBaseUrl,
@@ -347,7 +358,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
     timeout.arm();
 
     try {
-        const res = await fetchFn(`${ollamaBaseUrl}/api/tags`, {
+        const res = await resolvedFetch(`${ollamaBaseUrl}/api/tags`, {
             method: 'GET',
             headers: { Accept: 'application/json' },
             signal: timeout.signal,
@@ -400,7 +411,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
     }
 }
 
-module.exports = {
+export {
     generateOllamaResponse,
     getOllamaHealth,
 };

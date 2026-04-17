@@ -1,15 +1,30 @@
-// Mock fs avant tout require pour intercepter les appels disque.
-jest.mock('fs');
+import { jest } from '@jest/globals';
 
-// Mock le logger pour eviter le bruit dans la sortie des tests.
-jest.mock('../../logger', () => ({
+const fsMock = {
+    existsSync: jest.fn(),
+    mkdirSync: jest.fn(),
+    readFileSync: jest.fn(),
+    writeFileSync: jest.fn(),
+};
+
+const loggerMock = {
     dbSuccess: jest.fn(),
     dbError: jest.fn(),
     dbConnection: jest.fn(),
+};
+
+jest.unstable_mockModule('fs', () => ({
+    default: fsMock,
 }));
 
-const fs = require('fs');
-const { getConversation, saveConversation, deleteConversation, listConversations } = require('../../services/history');
+jest.unstable_mockModule('../../logger.js', () => ({
+    default: loggerMock,
+}));
+
+async function freshImport() {
+    jest.resetModules();
+    return import('../../services/history.js');
+}
 
 // -------------------------------------------------------------------
 // Utilitaires pour simplifier la mise en place des tests
@@ -17,23 +32,24 @@ const { getConversation, saveConversation, deleteConversation, listConversations
 
 // Simule un fichier conversations.json avec le contenu fourni.
 function mockFileWith(data) {
-    fs.existsSync.mockReturnValue(true);
-    fs.readFileSync.mockReturnValue(JSON.stringify(data));
+    fsMock.existsSync.mockReturnValue(true);
+    fsMock.readFileSync.mockReturnValue(JSON.stringify(data));
 }
 
 // Simule un fichier conversations.json vide (aucune conversation).
 function mockEmptyFile() {
-    fs.existsSync.mockReturnValue(true);
-    fs.readFileSync.mockReturnValue(JSON.stringify({}));
+    fsMock.existsSync.mockReturnValue(true);
+    fsMock.readFileSync.mockReturnValue(JSON.stringify({}));
 }
 
 // Recupere l'objet JSON ecrit lors du dernier appel a writeFileSync.
 function getWrittenData() {
-    const lastCall = fs.writeFileSync.mock.calls[0];
+    const lastCall = fsMock.writeFileSync.mock.calls[0];
     return JSON.parse(lastCall[1]);
 }
 
 beforeEach(() => {
+    jest.resetModules();
     jest.clearAllMocks();
 });
 
@@ -43,16 +59,17 @@ beforeEach(() => {
 
 describe('getConversation', () => {
 
-    test('doit retourner null si la conversation n\'existe pas', () => {
+    test('doit retourner null si la conversation n\'existe pas', async () => {
         // Le fichier existe mais ne contient pas l'id demande.
         mockFileWith({ conv_autre: { id: 'conv_autre', messages: [] } });
+        const { getConversation } = await freshImport();
 
         const result = getConversation('conv_inexistante');
 
         expect(result).toBeNull();
     });
 
-    test('doit retourner la conversation si elle existe', () => {
+    test('doit retourner la conversation si elle existe', async () => {
         const conversation = {
             id: 'conv_1',
             title: 'Mon titre',
@@ -61,6 +78,7 @@ describe('getConversation', () => {
             updatedAt: '2024-01-01T00:00:00.000Z',
         };
         mockFileWith({ conv_1: conversation });
+        const { getConversation } = await freshImport();
 
         const result = getConversation('conv_1');
 
@@ -75,8 +93,9 @@ describe('getConversation', () => {
 
 describe('saveConversation', () => {
 
-    test('doit creer une conversation avec un titre genere depuis le premier message user', () => {
+    test('doit creer une conversation avec un titre genere depuis le premier message user', async () => {
         mockEmptyFile();
+        const { saveConversation } = await freshImport();
 
         const messages = [
             { role: 'user', content: 'Comment aller mieux ?' },
@@ -88,8 +107,9 @@ describe('saveConversation', () => {
         expect(written['conv_1'].title).toBe('Comment aller mieux ?');
     });
 
-    test('doit tronquer le titre a 60 caracteres si le premier message est trop long', () => {
+    test('doit tronquer le titre a 60 caracteres si le premier message est trop long', async () => {
         mockEmptyFile();
+        const { saveConversation } = await freshImport();
 
         const messageLong = 'A'.repeat(80);
         const messages = [{ role: 'user', content: messageLong }];
@@ -103,8 +123,9 @@ describe('saveConversation', () => {
         expect(titre.endsWith('...')).toBe(true);
     });
 
-    test('doit utiliser "Nouvelle conversation" si aucun message utilisateur n\'est present', () => {
+    test('doit utiliser "Nouvelle conversation" si aucun message utilisateur n\'est present', async () => {
         mockEmptyFile();
+        const { saveConversation } = await freshImport();
 
         const messages = [{ role: 'assistant', content: 'Je suis pret.' }];
         saveConversation('conv_1', messages);
@@ -113,7 +134,7 @@ describe('saveConversation', () => {
         expect(written['conv_1'].title).toBe('Nouvelle conversation');
     });
 
-    test('doit conserver la date de creation d\'origine lors d\'une mise a jour', () => {
+    test('doit conserver la date de creation d\'origine lors d\'une mise a jour', async () => {
         const dateCreation = '2024-01-01T10:00:00.000Z';
         const existante = {
             id: 'conv_1',
@@ -123,6 +144,7 @@ describe('saveConversation', () => {
             updatedAt: dateCreation,
         };
         mockFileWith({ conv_1: existante });
+        const { saveConversation } = await freshImport();
 
         const nouveauxMessages = [{ role: 'user', content: 'Nouveau message' }];
         saveConversation('conv_1', nouveauxMessages);
@@ -132,8 +154,9 @@ describe('saveConversation', () => {
         expect(written['conv_1'].createdAt).toBe(dateCreation);
     });
 
-    test('doit utiliser le titre explicite fourni en parametre', () => {
+    test('doit utiliser le titre explicite fourni en parametre', async () => {
         mockEmptyFile();
+        const { saveConversation } = await freshImport();
 
         const messages = [{ role: 'user', content: 'Message ignore pour le titre' }];
         saveConversation('conv_1', messages, 'Titre personnalise');
@@ -150,18 +173,20 @@ describe('saveConversation', () => {
 
 describe('deleteConversation', () => {
 
-    test('doit retourner false si la conversation n\'existe pas', () => {
+    test('doit retourner false si la conversation n\'existe pas', async () => {
         mockFileWith({ conv_autre: { id: 'conv_autre' } });
+        const { deleteConversation } = await freshImport();
 
         const result = deleteConversation('conv_inexistante');
 
         expect(result).toBe(false);
     });
 
-    test('doit supprimer la conversation et retourner true si elle existe', () => {
+    test('doit supprimer la conversation et retourner true si elle existe', async () => {
         mockFileWith({
             conv_1: { id: 'conv_1', title: 'A supprimer', messages: [] },
         });
+        const { deleteConversation } = await freshImport();
 
         const result = deleteConversation('conv_1');
 
@@ -180,15 +205,16 @@ describe('deleteConversation', () => {
 
 describe('listConversations', () => {
 
-    test('doit retourner un tableau vide s\'il n\'y a aucune conversation', () => {
+    test('doit retourner un tableau vide s\'il n\'y a aucune conversation', async () => {
         mockEmptyFile();
+        const { listConversations } = await freshImport();
 
         const result = listConversations();
 
         expect(result).toEqual([]);
     });
 
-    test('doit retourner les conversations SANS le champ messages', () => {
+    test('doit retourner les conversations SANS le champ messages', async () => {
         mockFileWith({
             conv_1: {
                 id: 'conv_1',
@@ -198,6 +224,7 @@ describe('listConversations', () => {
                 updatedAt: '2024-01-01T00:00:00.000Z',
             },
         });
+        const { listConversations } = await freshImport();
 
         const result = listConversations();
 
@@ -206,7 +233,7 @@ describe('listConversations', () => {
         expect(result[0].title).toBe('Test');
     });
 
-    test('doit trier les conversations de la plus recente a la plus ancienne', () => {
+    test('doit trier les conversations de la plus recente a la plus ancienne', async () => {
         mockFileWith({
             conv_ancienne: {
                 id: 'conv_ancienne',
@@ -223,6 +250,7 @@ describe('listConversations', () => {
                 updatedAt: '2024-06-01T00:00:00.000Z',
             },
         });
+        const { listConversations } = await freshImport();
 
         const result = listConversations();
 

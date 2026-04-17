@@ -1,5 +1,5 @@
-const chalk = require('chalk');
-const morgan = require('morgan');
+import chalk from 'chalk';
+import morgan from 'morgan';
 
 /* ============================================================
    LOGGER SERVEUR - GYMSHARK SYNC
@@ -213,8 +213,7 @@ function morganMiddleware() {
     });
 }
 
-// Expose l'API du logger pour les modules backend.
-module.exports = {
+const logger = {
     http,
     dbSuccess,
     dbError,
@@ -227,3 +226,19 @@ module.exports = {
     systemInfo,
     morganMiddleware,
 };
+
+export {
+    http,
+    dbSuccess,
+    dbError,
+    dbConnection,
+    fatal,
+    warn,
+    info,
+    systemStart,
+    systemStop,
+    systemInfo,
+    morganMiddleware,
+};
+
+export default logger;

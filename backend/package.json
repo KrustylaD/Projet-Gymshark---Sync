@@ -4,10 +4,10 @@
   "description": "",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
+  "type": "module",
   "main": "server.js",
   "scripts": {
-    "test": "jest --runInBand --verbose",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --verbose",
     "start": "node server.js"
   },
   "dependencies": {
@@ -15,7 +15,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "jest": "^30.3.0"

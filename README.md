@@ -8,9 +8,11 @@ Assistant IA interne pour améliorer la productivité et la coordination en entr
 | ----------------- | -------------------------------------------------------------------- |
 | **Frontend**      | HTML5, CSS3 (variables, grid, flexbox), JavaScript (vanilla ES2020+) |
 | **Backend**       | Node.js, Express 5.2                                                 |
+| **Module system** | ES6 Modules (`import` / `export`)                                    |
 | **LLM**           | Ollama (modèle `phi3:mini` par défaut)                               |
 | **Persistance**   | Fichier JSON (`data/conversations.json`)                             |
 | **Communication** | SSE (Server-Sent Events) pour le streaming des réponses              |
+| **API Docs**      | Swagger UI + OpenAPI 3 (`/api/docs`)                                 |
 
 ## Structure du projet
 
@@ -90,6 +92,8 @@ cp .env.example .env
 cd backend
 npm start
 # Le serveur démarre sur http://localhost:3000
+# Swagger UI : http://localhost:3000/api/docs
+# Spec OpenAPI JSON : http://localhost:3000/api/docs.json
 ```
 
 ### 4. Ouvrir le frontend
@@ -155,6 +159,8 @@ Ports personnalisables via variables d'environnement :
 | `DELETE` | `/api/conversations/:id` | Supprime une conversation                      |
 | `GET`    | `/api/llm/health`        | Health check du serveur Ollama                 |
 | `GET`    | `/api/test-stream`       | Test de streaming SSE avec un prompt simple    |
+| `GET`    | `/api/docs`              | Interface Swagger UI                           |
+| `GET`    | `/api/docs.json`         | Spécification OpenAPI JSON                     |
 
 ### Format du body `POST /api/chat`
 

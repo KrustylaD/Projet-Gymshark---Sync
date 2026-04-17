@@ -1,6 +1,10 @@
-const fs = require('fs');
-const path = require('path');
-const logger = require('../logger');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import logger from '../logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Chemin vers le fichier texte qui contient les instructions systeme du LLM.
 const SYSTEM_PROMPT_PATH = path.join(__dirname, '..', 'system_prompt');
@@ -40,7 +44,7 @@ function getSystemPrompt() {
     }
 }
 
-module.exports = {
+export {
     getSystemPrompt,
     SYSTEM_PROMPT_PATH,
 };

@@ -1663,6 +1663,13 @@ function ensureSpeechRecognition() {
     };
 
     recognition.onerror = (event) => {
+        // Log l'erreur en console pour faciliter le diagnostic
+        try {
+            console.error('SpeechRecognition error event:', event);
+        } catch (e) {
+            // ignore
+        }
+
         state.speechErrored = true;
         state.speechShouldRestart = false;
         state.speechActive = false;
@@ -1671,6 +1678,16 @@ function ensureSpeechRecognition() {
     };
 
     recognition.onend = () => {
+        try {
+            console.log('SpeechRecognition ended. current state:', {
+                speechErrored: state.speechErrored,
+                speechShouldRestart: state.speechShouldRestart,
+                speechFinalText: state.speechFinalText,
+            });
+        } catch (e) {
+            // ignore
+        }
+
         const finalText = mergeSpeechText(state.speechBaseText, state.speechFinalText);
         if (state.speechInput && finalText) {
             syncAllInputs(finalText);

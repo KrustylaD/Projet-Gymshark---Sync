@@ -1,22 +1,37 @@
-// fetchFn est capture au chargement du module (fetchFn = global.fetch).
-// On doit donc remplacer global.fetch PAR UN MOCK avant le premier require.
-const fetchMock = jest.fn();
-global.fetch = fetchMock;
+import { jest } from '@jest/globals';
 
-// Mock config/prompt pour eviter la lecture du fichier system_prompt sur disque.
-jest.mock('../../config/prompt', () => ({
+// fetchFn est capture au chargement du module (fetchFn = global.fetch).
+// On doit donc remplacer global.fetch PAR UN MOCK avant le premier import.
+const fetchMock = jest.fn();
+globalThis.fetch = fetchMock;
+
+const promptMock = {
     getSystemPrompt: jest.fn().mockReturnValue(''),
     SYSTEM_PROMPT_PATH: '/mock/system_prompt',
-}));
+};
 
-// Mock le logger pour eviter le bruit dans la sortie des tests.
-jest.mock('../../logger', () => ({
+const loggerMock = {
     systemInfo: jest.fn(),
     fatal: jest.fn(),
     warn: jest.fn(),
+};
+
+// Mock config/prompt pour eviter la lecture du fichier system_prompt sur disque.
+jest.unstable_mockModule('../../config/prompt.js', () => ({
+    getSystemPrompt: promptMock.getSystemPrompt,
+    SYSTEM_PROMPT_PATH: promptMock.SYSTEM_PROMPT_PATH,
 }));
 
-const { generateOllamaResponse, getOllamaHealth } = require('../../services/ollama');
+// Mock le logger pour eviter le bruit dans la sortie des tests.
+jest.unstable_mockModule('../../logger.js', () => ({
+    default: loggerMock,
+}));
+
+async function freshImport() {
+    jest.resetModules();
+    globalThis.fetch = fetchMock;
+    return import('../../services/ollama.js');
+}
 
 // -------------------------------------------------------------------
 // Utilitaires pour simuler les reponses Ollama
@@ -52,7 +67,11 @@ function mockOllamaTagsResponse(modeles) {
 }
 
 beforeEach(() => {
+    jest.resetModules();
+    globalThis.fetch = fetchMock;
     fetchMock.mockReset();
+    promptMock.getSystemPrompt.mockReturnValue('');
+    jest.clearAllMocks();
 });
 
 // ===================================================================
@@ -62,12 +81,14 @@ beforeEach(() => {
 describe('generateOllamaResponse', () => {
 
     test('doit lancer une erreur si Ollama repond avec un status HTTP 500', async () => {
+        const { generateOllamaResponse } = await freshImport();
         mockOllamaErrorResponse(500);
 
         await expect(generateOllamaResponse('test')).rejects.toThrow('Ollama HTTP error');
     });
 
     test('doit retourner le texte assemble a partir des chunks JSON', async () => {
+        const { generateOllamaResponse } = await freshImport();
         // Simuler deux fragments de texte puis un marqueur de fin.
         mockOllamaStreamResponse([
             '{"response":"Bonjour","done":false}',
@@ -81,6 +102,7 @@ describe('generateOllamaResponse', () => {
     });
 
     test('doit appeler onChunk pour chaque fragment de texte recu', async () => {
+        const { generateOllamaResponse } = await freshImport();
         mockOllamaStreamResponse([
             '{"response":"Premier","done":false}',
             '{"response":"Deuxieme","done":false}',
@@ -96,6 +118,7 @@ describe('generateOllamaResponse', () => {
     });
 
     test('doit gerer les lignes avec prefixe "data:" (format SSE)', async () => {
+        const { generateOllamaResponse } = await freshImport();
         // Certaines implementations envoient les lignes prefixees par "data:".
         mockOllamaStreamResponse([
             'data: {"response":"Hello","done":false}',
@@ -107,6 +130,7 @@ describe('generateOllamaResponse', () => {
     });
 
     test('doit ignorer les lignes [DONE]', async () => {
+        const { generateOllamaResponse } = await freshImport();
         mockOllamaStreamResponse([
             '{"response":"Texte","done":false}',
             '[DONE]',
@@ -128,6 +152,7 @@ describe('generateOllamaResponse', () => {
 describe('getOllamaHealth', () => {
 
     test('doit retourner ok: true avec la liste des modeles si Ollama est disponible', async () => {
+        const { getOllamaHealth } = await freshImport();
         mockOllamaTagsResponse([
             { name: 'phi3:mini' },
             { name: 'llama2' },
@@ -141,6 +166,7 @@ describe('getOllamaHealth', () => {
     });
 
     test('doit retourner ok: false si Ollama repond avec une erreur HTTP', async () => {
+        const { getOllamaHealth } = await freshImport();
         fetchMock.mockResolvedValueOnce({
             ok: false,
             status: 503,
@@ -155,6 +181,7 @@ describe('getOllamaHealth', () => {
     });
 
     test('doit indiquer modelAvailable: true si le modele configure est dans la liste', async () => {
+        const { getOllamaHealth } = await freshImport();
         // Le modele par defaut est "phi3:mini" quand OLLAMA_MODEL n'est pas defini.
         mockOllamaTagsResponse([{ name: 'phi3:mini' }]);
 
@@ -164,6 +191,7 @@ describe('getOllamaHealth', () => {
     });
 
     test('doit indiquer modelAvailable: false si le modele configure est absent', async () => {
+        const { getOllamaHealth } = await freshImport();
         // La liste des modeles ne contient pas "phi3:mini".
         mockOllamaTagsResponse([{ name: 'llama2' }, { name: 'mistral' }]);
 

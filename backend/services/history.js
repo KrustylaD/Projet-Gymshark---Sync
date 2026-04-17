@@ -1,6 +1,10 @@
-const fs = require('fs');
-const path = require('path');
-const logger = require('../logger');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import logger from '../logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /* ============================================================
    SERVICE DE PERSISTANCE DES CONVERSATIONS
@@ -183,4 +187,9 @@ function extractTitle(messages) {
     return text;
 }
 
-module.exports = { getConversation, saveConversation, deleteConversation, listConversations };
+export {
+    getConversation,
+    saveConversation,
+    deleteConversation,
+    listConversations,
+};

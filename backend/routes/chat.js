@@ -1,7 +1,7 @@
-const express = require('express');
-const { generateOllamaResponse, getOllamaHealth } = require('../services/ollama');
-const { getConversation, saveConversation, deleteConversation, listConversations } = require('../services/history');
-const logger = require('../logger');
+import express from 'express';
+import { generateOllamaResponse, getOllamaHealth } from '../services/ollama.js';
+import { getConversation, saveConversation, deleteConversation, listConversations } from '../services/history.js';
+import logger from '../logger.js';
 
 const router = express.Router();
 
@@ -265,4 +265,4 @@ router.get('/api/test-stream', async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
