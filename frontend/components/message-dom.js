@@ -4,10 +4,10 @@
 
 import { dom, state, STORAGE_KEYS } from '../constants/config.js';
 import { getAssistantDisplayContent, renderAssistantMessage } from '../utils/markdown.js';
-import { showStatus } from './feedback.js';
 import { setConversationMode } from './feedback.js';
 import { storageGet, storageSet, storageRemove } from '../utils/storage.js';
 import { syncAllInputs } from './input-sync.js';
+import { bindHoverActionBar, buildMessageActionBar } from './message-actions.js';
 
 export function setInputsDisabled(disabled) {
     for (const input of dom.textInputs) input.disabled = disabled;
@@ -20,31 +20,6 @@ export function scrollConversationToBottom(behavior = 'smooth') {
         top: dom.conversationFeed.scrollHeight,
         behavior,
     });
-}
-
-export function createIconActionButton(iconClass, title, onClick, extraClass = '') {
-    const button = document.createElement('button');
-    const icon = document.createElement('i');
-    button.type = 'button';
-    button.className = `icon-action-button${extraClass ? ` ${extraClass}` : ''}`;
-    button.title = title;
-    button.setAttribute('aria-label', title);
-    icon.className = iconClass;
-    icon.setAttribute('aria-hidden', 'true');
-    button.append(icon);
-    button.addEventListener('click', onClick);
-    return button;
-}
-
-export function createMessageActionBar() {
-    const bar = document.createElement('div');
-    bar.className = 'message-action-bar';
-    return bar;
-}
-
-export function bindHoverActionBar(container, actionBar) {
-    container.addEventListener('mouseenter', () => actionBar.classList.add('est-visible'));
-    container.addEventListener('mouseleave', () => actionBar.classList.remove('est-visible'));
 }
 
 export function setMessageContent(article, contentNode, content, role) {
@@ -61,28 +36,6 @@ export function setMessageContent(article, contentNode, content, role) {
     }
 
     contentNode.textContent = rawContent;
-}
-
-export function copyTextToClipboard(getText) {
-    const text = typeof getText === 'function' ? getText() : getText;
-    navigator.clipboard.writeText(text || '')
-        .then(() => showStatus('Message copié.'))
-        .catch(() => showStatus('Erreur lors de la copie.'));
-}
-
-export function buildMessageActionBar({ getCopyContent, onEdit } = {}) {
-    const actionBar = createMessageActionBar();
-    actionBar.append(
-        createIconActionButton('fa-regular fa-copy', 'Copier', () => copyTextToClipboard(getCopyContent))
-    );
-
-    if (typeof onEdit === 'function') {
-        actionBar.append(
-            createIconActionButton('fa-regular fa-pen-to-square', 'Modifier', onEdit)
-        );
-    }
-
-    return actionBar;
 }
 
 export function mountConversationShell(shell, actionBar) {
@@ -114,7 +67,6 @@ export function appendMessage(content, role) {
     if (!dom.conversationFeed || !content) return null;
 
     const { shell, article, contentNode } = buildMessageShell(content, role);
-    // Import modale asynchronously to avoid circular dependency
     const actionBar = buildMessageActionBar({
         getCopyContent: () => article.dataset.rawContent || contentNode.textContent || '',
         onEdit: role === 'utilisateur'
@@ -149,9 +101,10 @@ export function collectMessagesFromDom() {
 
 export function saveConversationSnapshot() {
     const messages = collectMessagesFromDom();
+    const isInConversation = messages.length > 0 || dom.chatView?.classList.contains('est-en-conversation');
     const snapshot = {
         conversationId: state.conversationId,
-        isConversationMode: messages.length > 0 || !!dom.chatView?.classList.contains('est-en-conversation'),
+        isConversationMode: !!isInConversation,
         messages,
     };
     storageSet(STORAGE_KEYS.snapshot, JSON.stringify(snapshot));

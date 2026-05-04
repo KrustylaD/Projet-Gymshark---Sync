@@ -9,9 +9,8 @@ import {
     setConversationId,
     saveConversationSnapshot,
     scrollConversationToBottom,
-    bindHoverActionBar,
-    createIconActionButton,
 } from '../components/message-dom.js';
+import { bindHoverActionBar, createIconActionButton } from '../components/message-actions.js';
 import { openConfirmModal } from '../components/modals.js';
 import { resetConversation } from '../components/input.js';
 import { stopSpeechInput } from './speech.js';

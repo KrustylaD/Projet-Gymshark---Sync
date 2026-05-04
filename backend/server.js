@@ -15,6 +15,8 @@ import { swaggerSpec } from './config/swagger.js';
 const app = express();
 
 // Port configurable via variable d'environnement, 3000 par defaut.
+const SHUTDOWN_TIMEOUT_MS = 5000;
+
 const parsedPort = Number(process.env.PORT);
 const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 
@@ -55,7 +57,7 @@ function handleShutdown(signal) {
     // Securite: forcer l'arret si une connexion bloque la fermeture.
     setTimeout(() => {
         process.exit(0);
-    }, 5000).unref();
+    }, SHUTDOWN_TIMEOUT_MS).unref();
 }
 
 // Arret propre en dev (Ctrl+C) et en execution conteneurisee.

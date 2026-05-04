@@ -5,8 +5,9 @@ import logger from '../logger.js';
 
 const router = express.Router();
 
-// Nombre maximum de tours (paires user/assistant) conserves dans le prompt.
 const MAX_HISTORY_TURNS = 8;
+const MESSAGE_PREVIEW_MAX_LENGTH = 50;
+const TEST_STREAM_TIMEOUT_MS = 15000;
 
 /* ============================================================
    FONCTIONS UTILITAIRES
@@ -102,7 +103,7 @@ router.post('/api/chat', async (req, res) => {
     // Construire un apercu du message pour les logs (sans exposer le contenu complet).
     let messagePreview = '';
     if (message != null) {
-        messagePreview = String(message).slice(0, 50);
+        messagePreview = String(message).slice(0, MESSAGE_PREVIEW_MAX_LENGTH);
     }
     logger.info(`Message recu: ${messagePreview}`);
 
@@ -255,7 +256,7 @@ router.get('/api/test-stream', async (req, res) => {
 
     try {
         await generateResponse(prompt, {
-            timeoutMs: 15000,
+            timeoutMs: TEST_STREAM_TIMEOUT_MS,
             onChunk: (chunk) => {
                 chunkCount++;
                 res.write(`data: ${chunk}\n\n`);

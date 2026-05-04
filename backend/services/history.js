@@ -19,18 +19,18 @@ const HISTORY_FILE = path.join(DATA_DIR, 'conversations.json');
 // Longueur maximale d'un titre de conversation genere automatiquement.
 const TITLE_MAX_LENGTH = 60;
 
-let _dataDirEnsured = false;
+let isDataDirEnsured = false;
 
 /**
  * Cree le dossier de donnees s'il n'existe pas encore.
  */
 function ensureDataDir() {
-    if (_dataDirEnsured) return;
+    if (isDataDirEnsured) return;
     if (!existsSync(DATA_DIR)) {
         mkdirSync(DATA_DIR, { recursive: true });
         logger.dbConnection('Dossier data cree: ' + DATA_DIR);
     }
-    _dataDirEnsured = true;
+    isDataDirEnsured = true;
 }
 
 /**

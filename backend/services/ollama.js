@@ -15,6 +15,7 @@ if (ollamaBaseUrl == null || ollamaBaseUrl === '') {
 ollamaBaseUrl = ollamaBaseUrl.replace(/\/$/, '');
 
 const API_URL = ollamaBaseUrl + '/api/generate';
+const HEALTH_TIMEOUT_MS = 5000;
 
 // Modele LLM a utiliser, configurable via variable d'environnement.
 let MODEL = process.env.OLLAMA_MODEL;
@@ -344,7 +345,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
  * Verifie la disponibilite du serveur Ollama en interrogeant /api/tags.
  * Retourne un objet { ok, url, model, ... } decrivant l'etat du serveur.
  */
-async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
+async function getOllamaHealth({ timeoutMs = HEALTH_TIMEOUT_MS } = {}) {
     const resolvedFetch = await ensureFetch();
     if (resolvedFetch == null) {
         return {

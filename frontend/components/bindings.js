@@ -14,6 +14,14 @@ import { setDiagnosticStatus } from './feedback.js';
 import { toggleSpeechInput, stopSpeechInput } from '../services/speech.js';
 import { setRefreshHistory } from '../services/chat.js';
 
+const RIPPLE_REMOVE_MS = 520;
+const ANIMATION_DELAY_STEP_MS = 36;
+const ANIMATION_MAX_DELAY_MS = 240;
+const SIDEBAR_ANIM_DURATION_MS = 980;
+const CONTENT_ANIM_DURATION_MS = 1100;
+const CONTENT_ANIM_DELAY_MS = 80;
+const LOADING_SCREEN_DELAY_MS = 2200;
+
 function createRipple(button, event) {
     const rect = button.getBoundingClientRect();
     const ripple = document.createElement('span');
@@ -21,7 +29,7 @@ function createRipple(button, event) {
     ripple.style.left = `${event.clientX - rect.left}px`;
     ripple.style.top = `${event.clientY - rect.top}px`;
     button.append(ripple);
-    setTimeout(() => ripple.remove(), 520);
+    setTimeout(() => ripple.remove(), RIPPLE_REMOVE_MS);
 }
 
 function initAnimations() {
@@ -31,7 +39,7 @@ function initAnimations() {
 
     for (const [index, element] of animables.entries()) {
         element.classList.add('animable');
-        element.style.transitionDelay = `${Math.min(index * 36, 240)}ms`;
+        element.style.transitionDelay = `${Math.min(index * ANIMATION_DELAY_STEP_MS, ANIMATION_MAX_DELAY_MS)}ms`;
     }
 
     const observer = new IntersectionObserver(
@@ -55,7 +63,7 @@ function initAnimations() {
                 { opacity: 1, transform: 'translateX(0) scale(1)', filter: 'blur(0)' },
             ],
             {
-                duration: 980,
+                duration: SIDEBAR_ANIM_DURATION_MS,
                 easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
                 fill: 'both',
             }
@@ -67,8 +75,8 @@ function initAnimations() {
                 { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0)' },
             ],
             {
-                duration: 1100,
-                delay: 80,
+                duration: CONTENT_ANIM_DURATION_MS,
+                delay: CONTENT_ANIM_DELAY_MS,
                 easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
                 fill: 'both',
             }
@@ -238,6 +246,6 @@ export function initPage() {
             if (state.conversationId) {
                 loadConversation(state.conversationId);
             }
-        }, 2200);
+        }, LOADING_SCREEN_DELAY_MS);
     });
 }

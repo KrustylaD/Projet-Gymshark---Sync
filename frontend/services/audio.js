@@ -6,6 +6,15 @@ import { dom, state } from '../constants/config.js';
 import { setDiagnosticStatus } from '../components/feedback.js';
 import { stopSpeechInput } from './speech.js';
 
+const MIC_LEVEL_MULTIPLIER = 280;
+const SPEAKER_TEST_FREQUENCY_HZ = 880;
+const SPEAKER_GAIN_MIN = 0.0001;
+const SPEAKER_GAIN_MAX = 0.08;
+const SPEAKER_GAIN_RAMP_MS = 0.03;
+const SPEAKER_TEST_DURATION_S = 0.6;
+const SPEAKER_CLEANUP_DURATION_S = 0.62;
+const SPEAKER_RESET_DELAY_MS = 700;
+
 export function setAudioMeter(bar, label, value, prefix) {
     const safeValue = Math.max(0, Math.min(100, Math.round(value)));
     if (bar) bar.style.width = `${safeValue}%`;
@@ -67,7 +76,7 @@ export function animateMicLevel() {
     }
 
     const rms = Math.sqrt(sum / buffer.length);
-    setAudioMeter(dom.micLevelBar, dom.micLevelText, Math.min(100, rms * 280), 'Niveau micro');
+    setAudioMeter(dom.micLevelBar, dom.micLevelText, Math.min(100, rms * MIC_LEVEL_MULTIPLIER), 'Niveau micro');
 
     if (state.micTestActive) {
         state.micFrame = requestAnimationFrame(animateMicLevel);
@@ -199,15 +208,15 @@ export async function playSpeakerTest() {
         const oscillator = state.speakerContext.createOscillator();
         const gain = state.speakerContext.createGain();
         oscillator.type = 'sine';
-        oscillator.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, state.speakerContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.08, state.speakerContext.currentTime + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, state.speakerContext.currentTime + 0.6);
+        oscillator.frequency.value = SPEAKER_TEST_FREQUENCY_HZ;
+        gain.gain.setValueAtTime(SPEAKER_GAIN_MIN, state.speakerContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(SPEAKER_GAIN_MAX, state.speakerContext.currentTime + SPEAKER_GAIN_RAMP_MS);
+        gain.gain.exponentialRampToValueAtTime(SPEAKER_GAIN_MIN, state.speakerContext.currentTime + SPEAKER_TEST_DURATION_S);
 
         oscillator.connect(gain);
         gain.connect(state.speakerContext.destination);
         oscillator.start();
-        oscillator.stop(state.speakerContext.currentTime + 0.62);
+        oscillator.stop(state.speakerContext.currentTime + SPEAKER_CLEANUP_DURATION_S);
 
         dom.speakerLevelBar?.classList.add('est-active');
         if (dom.speakerLevelBar) dom.speakerLevelBar.style.width = '100%';
@@ -218,7 +227,7 @@ export async function playSpeakerTest() {
             dom.speakerLevelBar?.classList.remove('est-active');
             resetSpeakerMeter();
             setDiagnosticStatus(dom.speakerStatus, 'Si vous avez entendu le bip, la sortie audio fonctionne.');
-        }, 700);
+        }, SPEAKER_RESET_DELAY_MS);
     } catch {
         setDiagnosticStatus(dom.speakerStatus, 'Impossible de jouer le son test.');
     }

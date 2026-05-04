@@ -6,6 +6,9 @@ import { API_BASE, dom, state } from '../constants/config.js';
 import { showStatus, setConversationMode } from '../components/feedback.js';
 import { getActiveInput } from '../components/input.js';
 import { syncAllInputs } from '../components/input-sync.js';
+
+const TYPING_INDICATOR_DELAY_MS = 2000;
+const SEND_BUTTON_FLASH_MS = 140;
 import {
     appendMessage,
     setInputsDisabled,
@@ -163,7 +166,7 @@ export async function sendAndStream(message, successStatus) {
             throw new Error(`Erreur serveur : ${response.status}`);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, TYPING_INDICATOR_DELAY_MS));
 
         const fullReply = await readSSEStream(response, assistantArticle);
         if (!fullReply && assistantArticle && contentNode) {
@@ -216,7 +219,7 @@ export async function sendMessage(event) {
     setConversationMode(true);
 
     if (activeButton) activeButton.classList.add('est-envoi');
-    setTimeout(() => activeButton?.classList.remove('est-envoi'), 140);
+    setTimeout(() => activeButton?.classList.remove('est-envoi'), SEND_BUTTON_FLASH_MS);
 
     appendMessage(text, 'utilisateur');
     syncAllInputs('');

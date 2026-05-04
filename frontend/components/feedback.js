@@ -4,6 +4,18 @@
 
 import { dom, state } from '../constants/config.js';
 
+const STATUS_DISPLAY_MS = 2200;
+const PAGE_TRANSITION_MS = 720;
+const MAX_VIEW_ENTRANCE_TARGETS = 14;
+const VIEW_ENTRANCE_DURATION_MS = 640;
+const VIEW_ENTRANCE_DELAY_STEP_MS = 42;
+const VIEW_ENTRANCE_MAX_DELAY_MS = 220;
+const BATCH_ENTRANCE_DELAY_STEP_MS = 34;
+const BATCH_ENTRANCE_DURATION_MS = 560;
+const BATCH_ENTRANCE_MAX_DELAY_MS = 180;
+const VIEW_SWITCH_DELAY_MS = 170;
+const VIEW_OUTRO_CLEANUP_MS = 520;
+
 export function showStatus(message) {
     if (!dom.statusZone) return;
     dom.statusZone.textContent = message;
@@ -11,7 +23,7 @@ export function showStatus(message) {
     if (state.statusTimer) clearTimeout(state.statusTimer);
     state.statusTimer = setTimeout(() => {
         dom.statusZone.classList.remove('est-visible');
-    }, 2200);
+    }, STATUS_DISPLAY_MS);
 }
 
 export function setDiagnosticStatus(element, message) {
@@ -29,7 +41,7 @@ function pulsePageTransition() {
     dom.pageTransition.classList.remove('est-active');
     void dom.pageTransition.offsetWidth;
     dom.pageTransition.classList.add('est-active');
-    setTimeout(() => dom.pageTransition?.classList.remove('est-active'), 720);
+    setTimeout(() => dom.pageTransition?.classList.remove('est-active'), PAGE_TRANSITION_MS);
 }
 
 function getViewMotionTargets(view) {
@@ -58,7 +70,7 @@ function getViewMotionTargets(view) {
         }
     }
 
-    return uniqueTargets.slice(0, 14);
+    return uniqueTargets.slice(0, MAX_VIEW_ENTRANCE_TARGETS);
 }
 
 export function animateViewEntrance(view) {
@@ -80,8 +92,8 @@ export function animateViewEntrance(view) {
                 },
             ],
             {
-                duration: 640,
-                delay: Math.min(index * 42, 220),
+                duration: VIEW_ENTRANCE_DURATION_MS,
+                delay: Math.min(index * VIEW_ENTRANCE_DELAY_STEP_MS, VIEW_ENTRANCE_MAX_DELAY_MS),
                 easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
                 fill: 'both',
             }
@@ -89,7 +101,7 @@ export function animateViewEntrance(view) {
     }
 }
 
-export function animateElementBatch(elements, { delayStep = 34, duration = 560 } = {}) {
+export function animateElementBatch(elements, { delayStep = BATCH_ENTRANCE_DELAY_STEP_MS, duration = BATCH_ENTRANCE_DURATION_MS } = {}) {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     for (const [index, element] of elements.entries()) {
@@ -110,7 +122,7 @@ export function animateElementBatch(elements, { delayStep = 34, duration = 560 }
             ],
             {
                 duration,
-                delay: Math.min(index * delayStep, 180),
+                delay: Math.min(index * delayStep, BATCH_ENTRANCE_MAX_DELAY_MS),
                 easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
                 fill: 'both',
             }
@@ -152,9 +164,9 @@ export function activateView(viewName, { immediate = false } = {}) {
         currentView.classList.remove('vue-active', 'vue-transition-sortie');
         nextView.classList.add('vue-active', 'vue-transition-entree');
         requestAnimationFrame(() => animateViewEntrance(nextView));
-        setTimeout(() => nextView.classList.remove('vue-transition-entree'), 520);
+        setTimeout(() => nextView.classList.remove('vue-transition-entree'), VIEW_OUTRO_CLEANUP_MS);
         state.viewSwitchTimer = null;
-    }, 170);
+    }, VIEW_SWITCH_DELAY_MS);
 }
 
 export function setConversationMode(enabled) {
