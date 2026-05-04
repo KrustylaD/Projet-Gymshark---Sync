@@ -91,6 +91,31 @@ function getListItemDescriptor(line) {
     return null;
 }
 
+function isTableSeparator(line) {
+    return /^\|[\s:-]+\|$/u.test(line.trim()) || /^\|?[\s:-]+\|[\s:-]+/.test(line.trim());
+}
+
+function parseTableRow(line) {
+    return line.split('|').map(cell => cell.trim()).filter(c => c !== '');
+}
+
+function canStartTable(line, nextLine) {
+    if (!line.includes('|') || !nextLine.includes('|')) return false;
+    if (isTableSeparator(line)) return false;
+    if (!isTableSeparator(nextLine)) return false;
+    return true;
+}
+
+function collectTable(lines, startIndex) {
+    const rows = [];
+    let i = startIndex;
+    while (i < lines.length && lines[i].includes('|')) {
+        rows.push(lines[i]);
+        i++;
+    }
+    return { rows, endIndex: i };
+}
+
 function getMarkdownHeading(line) {
     const match = line.match(/^(#{1,4})\s+(.*)$/u);
     if (!match) return null;
@@ -134,6 +159,12 @@ function renderAssistantNodes(nodes) {
             const startAttr = node.ordered && node.start > 1 ? ` start="${node.start}"` : '';
             const items = node.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('');
             return `<${tag}${startAttr}>${items}</${tag}>`;
+        }
+
+        if (node.type === 'table') {
+            const thead = `<thead><tr>${node.headers.map(h => `<th>${renderInlineMarkdown(h)}</th>`).join('')}</tr></thead>`;
+            const tbody = `<tbody>${node.rows.map(row => `<tr>${row.map(c => `<td>${renderInlineMarkdown(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+            return `<div class="table-wrapper"><table>${thead}${tbody}</table></div>`;
         }
 
         if (node.type === 'paragraph') {
@@ -185,6 +216,18 @@ export function renderAssistantMessage(content) {
         if (!line) {
             flushParagraph();
             flushList();
+            continue;
+        }
+
+        if (canStartTable(line, nextLine)) {
+            flushParagraph();
+            flushList();
+            const { rows, endIndex } = collectTable(lines, index);
+            const separatorIdx = 1;
+            const headers = parseTableRow(rows[0]);
+            const dataRows = rows.slice(2).map(r => parseTableRow(r));
+            nodes.push({ type: 'table', headers, rows: dataRows });
+            index = endIndex - 1;
             continue;
         }
 

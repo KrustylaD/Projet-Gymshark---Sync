@@ -216,6 +216,45 @@
     font-weight: 500;
 }
 
+.message-assistant .message-body .table-wrapper {
+    overflow-x: auto;
+    margin: 0.6rem 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.message-assistant .message-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+}
+
+.message-assistant .message-body th,
+.message-assistant .message-body td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.message-assistant .message-body th {
+    background: rgba(255, 255, 255, 0.04);
+    font-weight: 600;
+    color: #eef2ff;
+    white-space: nowrap;
+}
+
+.message-assistant .message-body td {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.message-assistant .message-body tr:last-child td {
+    border-bottom: none;
+}
+
+.message-assistant .message-body tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
 .message-action-bar {
     display: flex;
     gap: 8px;
