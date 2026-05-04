@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="components/modals.css">
     <link rel="stylesheet" href="components/animations.css">
     <link rel="stylesheet" href="components/responsive.css">
+    <link rel="stylesheet" href="components/views.css">
 </head>
 <body>
     <div class="ecran-chargement" aria-hidden="true">
@@ -243,21 +244,48 @@
 
             <section class="vue" data-view="search">
                 <div class="vue-entete">
-                    <h2>Recherche</h2>
-                    <p>Retrouvez rapidement une demande, un document ou une conversation récente.</p>
+                    <h2>Rechercher</h2>
+                    <p>Trouvez des actions, prompts et documents en un instant.</p>
                 </div>
-                <div class="liste-elements">
+                <div class="section-saisie section-saisie-recherche">
+                    <form class="boite-saisie-recherche" novalidate>
+                        <div class="ligne-saisie-active" aria-hidden="true"></div>
+                        <svg class="icone-recherche-saisie" viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
+                            <path d="M10 4C6.7 4 4 6.7 4 10C4 13.3 6.7 16 10 16C11.4 16 12.7 15.5 13.7 14.7L18 19L19 18L14.7 13.7C15.5 12.7 16 11.4 16 10C16 6.7 13.3 4 10 4ZM10 5.5C12.5 5.5 14.5 7.5 14.5 10C14.5 12.5 12.5 14.5 10 14.5C7.5 14.5 5.5 12.5 5.5 10C5.5 7.5 7.5 5.5 10 5.5Z" fill="currentColor"/>
+                        </svg>
+                        <input type="text" class="champ-recherche" placeholder="Rechercher une action, un prompt, une commande..." aria-label="Rechercher">
+                        <div class="actions-saisie-droite">
+                            <button type="button" class="bouton-action bouton-recherche-effacer" aria-label="Effacer" title="Effacer">
+                                <svg class="icone-svg icone-ui" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M12 4C7.6 4 4 7.6 4 12C4 16.4 7.6 20 12 20C14.7 20 17 18.6 18.4 16.4L16.9 15.5C15.8 17.2 14 18.4 12 18.4C8.5 18.4 5.6 15.5 5.6 12C5.6 8.5 8.5 5.6 12 5.6C14.9 5.6 17.3 7.3 18.3 9.7L20 9L19 13L15.4 11.8L16.6 10.6C15.8 8.8 14 7.6 12 7.6C9.6 7.6 7.6 9.6 7.6 12C7.6 14.4 9.6 16.4 12 16.4C13.7 16.4 15.2 15.5 16 14.2L17.5 15.1C16.4 16.9 14.4 18 12 18C8.7 18 6 15.3 6 12C6 8.7 8.7 6 12 6C15.3 6 18 8.7 18 12H20C20 7.6 16.4 4 12 4Z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="recherche-suggestions" id="recherche-suggestions-list">
+                    <!-- Rempli dynamiquement -->
+                </div>
+                <div class="liste-elements" id="recherche-results">
                     <button class="element-liste" data-view-target="chat" data-prompt="Retrouve la dernière version du compte-rendu produit." type="button">
                         <strong>Compte-rendu produit</strong>
                         <span>Dernière mise à jour aujourd'hui</span>
                     </button>
-                    <button class="element-liste" data-view-target="docs" type="button">
-                        <strong>Documentation interne</strong>
-                        <span>Processus, guides et workflows</span>
-                    </button>
                     <button class="element-liste" data-view-target="chat" data-prompt="Montre-moi les tâches urgentes du support." type="button">
                         <strong>Tâches urgentes</strong>
                         <span>Filtrer les priorités du support</span>
+                    </button>
+                    <button class="element-liste" data-view-target="chat" data-prompt="Résume les échanges clés du projet." type="button">
+                        <strong>Résumé du projet</strong>
+                        <span>Synthèse des échanges récents</span>
+                    </button>
+                    <button class="element-liste" data-view-target="chat" data-prompt="Organise mes tâches de cette semaine par priorité." type="button">
+                        <strong>Organisation hebdomadaire</strong>
+                        <span>Planifier les priorités de la semaine</span>
+                    </button>
+                    <button class="element-liste" data-view-target="chat" data-prompt="Propose une automatisation simple pour les demandes répétitives." type="button">
+                        <strong>Automatisations</strong>
+                        <span>Workflows pour les tâches répétitives</span>
                     </button>
                 </div>
             </section>
@@ -265,21 +293,80 @@
             <section class="vue" data-view="shortcuts">
                 <div class="vue-entete">
                     <h2>Raccourcis</h2>
-                    <p>Lancez une action en un clic.</p>
+                    <p>Lancez une action en un clic. Chaque carte injecte automatiquement le prompt dans le chat.</p>
                 </div>
-                <div class="grille-raccourcis">
-                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Rédige un message de suivi pour mon équipe." type="button">
-                        <strong>Rédiger un suivi</strong>
-                        <span>Créer un message prêt à envoyer</span>
-                    </button>
-                    <button class="element-liste carte-action" data-view-target="chat" data-prompt="Prépare une liste de priorités pour demain." type="button">
-                        <strong>Priorités demain</strong>
-                        <span>Classer les tâches de demain</span>
-                    </button>
-                    <button class="element-liste carte-action" data-view-target="docs" type="button">
-                        <strong>Ouvrir la documentation</strong>
-                        <span>Accéder aux guides et procédures</span>
-                    </button>
+                <div class="raccourcis-categories">
+                    <div class="raccourcis-categorie">
+                        <h3 class="raccourcis-categorie-titre">Synthèse & Rédaction</h3>
+                        <div class="grille-raccourcis">
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Rédige un compte-rendu de réunion structuré avec les décisions clés et les actions à suivre." type="button">
+                                <span class="raccourci-icone"><i class="fa-regular fa-file-lines" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Compte-rendu de réunion</strong>
+                                    <span>Structurer un résumé avec décisions et actions</span>
+                                </div>
+                            </button>
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Résume l'état d'avancement du projet en 5 points clés." type="button">
+                                <span class="raccourci-icone"><i class="fa-regular fa-clipboard" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>État d'avancement</strong>
+                                    <span>Résumé en 5 points du projet en cours</span>
+                                </div>
+                            </button>
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Rédige un mail de suivi professionnel pour mon équipe." type="button">
+                                <span class="raccourci-icone"><i class="fa-regular fa-envelope" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Rédiger un suivi</strong>
+                                    <span>Message ou email prêt à envoyer</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="raccourcis-categorie">
+                        <h3 class="raccourcis-categorie-titre">Organisation & Priorités</h3>
+                        <div class="grille-raccourcis">
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Organise mes tâches de cette semaine par priorité, avec des deadlines estimées." type="button">
+                                <span class="raccourci-icone"><i class="fa-solid fa-list-check" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Priorités de la semaine</strong>
+                                    <span>Classer les tâches avec deadlines</span>
+                                </div>
+                            </button>
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Prépare une liste de priorités pour demain." type="button">
+                                <span class="raccourci-icone"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Priorités demain</strong>
+                                    <span>Programme du lendemain</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="raccourcis-categorie">
+                        <h3 class="raccourcis-categorie-titre">Automatisation & Workflow</h3>
+                        <div class="grille-raccourcis">
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Propose une automatisation simple pour les demandes répétitives de l'équipe." type="button">
+                                <span class="raccourci-icone"><i class="fa-solid fa-arrows-spin" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Automatisation simple</strong>
+                                    <span>Workflow pour tâches répétitives</span>
+                                </div>
+                            </button>
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Décris un processus pour gérer les demandes entrantes du support." type="button">
+                                <span class="raccourci-icone"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Processus support</strong>
+                                    <span>Gestion des tickets entrants</span>
+                                </div>
+                            </button>
+                            <button class="raccourci-carte" data-view-target="chat" data-prompt="Crée un template de formulaire pour les demandes internes." type="button">
+                                <span class="raccourci-icone"><i class="fa-regular fa-rectangle-list" aria-hidden="true"></i></span>
+                                <div class="raccourci-texte">
+                                    <strong>Template de formulaire</strong>
+                                    <span>Structure pour demandes internes</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </section>
 

@@ -217,8 +217,17 @@
     transform-origin: top center;
 }
 
-.vue.vue-active {
+.vue:not(.vue-active) {
+    display: none !important;
+}
+
+.vue:not(.vue-chat).vue-active {
     display: block;
+}
+
+.contenu-principal .vue.vue-active {
+    flex: 1;
+    min-height: 0;
 }
 
 .vue.vue-transition-sortie {

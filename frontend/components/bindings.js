@@ -13,6 +13,7 @@ import { toggleMicTest, prepareAudioDevices, playSpeakerTest, stopMicTest, openA
 import { setDiagnosticStatus } from './feedback.js';
 import { toggleSpeechInput, stopSpeechInput } from '../services/speech.js';
 import { setRefreshHistory } from '../services/chat.js';
+import { initSearch } from '../services/search.js';
 
 const RIPPLE_REMOVE_MS = 520;
 const ANIMATION_DELAY_STEP_MS = 36;
@@ -225,6 +226,7 @@ export function initPage() {
     // Resolve circular dependency: give chat.js access to refreshHistory
     setRefreshHistory(refreshHistory);
 
+    initSearch();
     initAnimations();
     bindGlobalEvents();
     bindNavigation();
