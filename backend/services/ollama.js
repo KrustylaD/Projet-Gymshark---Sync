@@ -9,7 +9,7 @@ import logger from '../logger.js';
 
 // URL de base Ollama, configurable via variable d'environnement.
 let ollamaBaseUrl = process.env.OLLAMA_URL;
-if (ollamaBaseUrl === undefined || ollamaBaseUrl === null || ollamaBaseUrl === '') {
+if (ollamaBaseUrl == null || ollamaBaseUrl === '') {
     ollamaBaseUrl = 'http://localhost:11434';
 }
 ollamaBaseUrl = ollamaBaseUrl.replace(/\/$/, '');
@@ -63,7 +63,7 @@ function extractTextPiece(line) {
         if (typeof parsed.response === 'string') return parsed.response;
 
         // Format /api/chat : { message: { content: '...' } }
-        if (parsed.message !== undefined && parsed.message !== null && typeof parsed.message.content === 'string') {
+        if (parsed.message != null && typeof parsed.message.content === 'string') {
             return parsed.message.content;
         }
 
@@ -97,14 +97,14 @@ function createAbortTimeout(timeoutMs) {
     let timeoutId;
 
     const clear = () => {
-        if (timeoutId !== undefined) {
+        if (timeoutId != null) {
             clearTimeout(timeoutId);
             timeoutId = undefined;
         }
     };
 
     const arm = () => {
-        if (hasTimeout === false) return;
+        if (!hasTimeout) return;
         clear();
         timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
     };

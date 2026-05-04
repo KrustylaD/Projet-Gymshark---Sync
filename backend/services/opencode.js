@@ -29,7 +29,9 @@ async function ensureFetch() {
             fetchFn = nodeFetch.default;
             return fetchFn;
         }
-    } catch {}
+    } catch {
+        // Dynamic import fallback — node-fetch may not be installed.
+    }
     return null;
 }
 
@@ -40,46 +42,19 @@ function createAbortTimeout(timeoutMs) {
     let timeoutId;
 
     const clear = () => {
-        if (timeoutId !== undefined) {
+        if (timeoutId != null) {
             clearTimeout(timeoutId);
             timeoutId = undefined;
         }
     };
 
     const arm = () => {
-        if (hasTimeout === false) return;
+        if (!hasTimeout) return;
         clear();
         timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
     };
 
     return { controller, signal: controller.signal, arm, clear };
-}
-
-function extractTextPiece(line) {
-    let value = String(line === undefined || line === null ? '' : line);
-    if (value === '') return '';
-
-    if (/^\s*data:\s*/.test(value)) {
-        value = value.replace(/^\s*data:\s*/, '');
-    }
-
-    if (value.trim() === '[DONE]') return '';
-
-    try {
-        const parsed = JSON.parse(value);
-
-        if (Array.isArray(parsed.choices)) {
-            const choice = parsed.choices[0];
-            if (choice && choice.delta) {
-                if (typeof choice.delta.content === 'string') return choice.delta.content;
-                if (typeof choice.delta.reasoning_content === 'string') return choice.delta.reasoning_content;
-            }
-        }
-
-        return '';
-    } catch (e) {
-        return value;
-    }
 }
 
 async function readWebStream(body, decoder, timeout, onLine) {
@@ -94,7 +69,7 @@ async function readWebStream(body, decoder, timeout, onLine) {
         pending += decoder.decode(value, { stream: true });
         const lines = pending.split(/\r?\n/);
         const lastLine = lines.pop();
-        pending = lastLine !== undefined ? lastLine : '';
+        pending = lastLine ?? '';
 
         for (const line of lines) {
             onLine(line);
@@ -124,7 +99,7 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
                 body.removeListener('end', onEnd);
                 body.removeListener('error', onError);
             }
-            if (signal !== undefined && signal !== null) {
+            if (signal != null) {
                 signal.removeEventListener('abort', onAbort);
             }
         };
@@ -135,7 +110,7 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
                 pending += decoder.decode(chunk, { stream: true });
                 const lines = pending.split(/\r?\n/);
                 const lastLine = lines.pop();
-                pending = lastLine !== undefined ? lastLine : '';
+                pending = lastLine ?? '';
                 for (const line of lines) {
                     onLine(line);
                 }
@@ -175,7 +150,7 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
         body.on('data', onData);
         body.on('end', onEnd);
         body.on('error', onError);
-        if (signal !== undefined && signal !== null) {
+        if (signal != null) {
             signal.addEventListener('abort', onAbort, { once: true });
         }
     });
@@ -183,7 +158,7 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
 
 export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, timeoutMs } = {}) {
     const resolvedFetch = await ensureFetch();
-    if (resolvedFetch === undefined || resolvedFetch === null) {
+    if (resolvedFetch == null) {
         throw new Error('No fetch implementation available. Install node-fetch or run on Node 18+');
     }
 
@@ -234,10 +209,10 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
     const decoder = new TextDecoder();
     let result = '';
     let reasoningBuf = '';
-    let seenContent = false;
+    let hasSeenContent = false;
 
     const onLine = (line) => {
-        let value = String(line === undefined || line === null ? '' : line);
+        let value = String(line ?? '');
         if (/^\s*data:\s*/.test(value)) value = value.replace(/^\s*data:\s*/, '');
         if (!value || value.trim() === '[DONE]') return;
 
@@ -248,33 +223,39 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
                 if (!delta) return;
 
                 if (typeof delta.content === 'string') {
-                    seenContent = true;
+                    hasSeenContent = true;
                     result += delta.content;
                     timeout.arm();
                     if (typeof onChunk === 'function') {
-                        try { onChunk(delta.content); } catch (e) {}
+                        try { onChunk(delta.content); } catch {
+                            // Callback errors should not interrupt the stream.
+                        }
                     }
                     return;
                 }
 
-                if (typeof delta.reasoning_content === 'string' && !seenContent) {
+                if (typeof delta.reasoning_content === 'string' && !hasSeenContent) {
                     if (!reasoningBuf && typeof onReasoning === 'function') {
-                        try { onReasoning(); } catch (e) {}
+                        try { onReasoning(); } catch {
+                            // Callback errors should not interrupt the stream.
+                        }
                     }
                     reasoningBuf += delta.reasoning_content;
                     timeout.arm();
                     return;
                 }
             }
-        } catch (e) {}
+        } catch {
+            // Ignore unparseable SSE lines (whitespace, comments, etc.).
+        }
     };
 
     try {
-        const bodyExists = res.body !== undefined && res.body !== null;
+        const hasBody = res.body != null;
 
-        if (bodyExists && typeof res.body.getReader === 'function') {
+        if (hasBody && typeof res.body.getReader === 'function') {
             await readWebStream(res.body, decoder, timeout, onLine);
-        } else if (bodyExists && typeof res.body.on === 'function') {
+        } else if (hasBody && typeof res.body.on === 'function') {
             await readNodeStream(res.body, decoder, timeout, timeout.signal, onLine);
         } else {
             const txt = await res.text().catch(() => '');
@@ -295,19 +276,23 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
         timeout.clear();
     }
 
-    if (!seenContent && reasoningBuf) {
+    if (!hasSeenContent && reasoningBuf) {
         result = reasoningBuf;
         if (typeof onChunk === 'function') {
-            try { onChunk(result); } catch (e) {}
+            try { onChunk(result); } catch {
+                // Callback errors should not interrupt the stream.
+            }
         }
     }
 
     return result;
 }
 
-export async function getOpenCodeHealth({ timeoutMs = 5000 } = {}) {
+const HEALTH_TIMEOUT_MS = 5000;
+
+export async function getOpenCodeHealth({ timeoutMs = HEALTH_TIMEOUT_MS } = {}) {
     const resolvedFetch = await ensureFetch();
-    if (resolvedFetch === undefined || resolvedFetch === null) {
+    if (resolvedFetch == null) {
         return {
             ok: false,
             url: CHAT_URL,

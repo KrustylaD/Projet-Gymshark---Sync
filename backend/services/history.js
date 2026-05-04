@@ -23,7 +23,7 @@ const TITLE_MAX_LENGTH = 60;
  */
 function ensureDataDir() {
     const dirExists = fs.existsSync(DATA_DIR);
-    if (dirExists === false) {
+    if (!dirExists) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
         logger.dbConnection('Dossier data cree: ' + DATA_DIR);
     }
@@ -38,7 +38,7 @@ function loadAll() {
 
     // Premiere execution : le fichier n'a pas encore ete cree.
     const fileExists = fs.existsSync(HISTORY_FILE);
-    if (fileExists === false) {
+    if (!fileExists) {
         return {};
     }
 
@@ -95,9 +95,9 @@ function saveConversation(id, messages, title) {
 
     // Determiner le titre : priorite au titre explicite, sinon celui existant, sinon on le genere.
     let finalTitle;
-    if (title !== undefined && title !== null && title !== '') {
+    if (title) {
         finalTitle = title;
-    } else if (existing !== undefined && existing !== null && existing.title) {
+    } else if (existing?.title) {
         finalTitle = existing.title;
     } else {
         finalTitle = extractTitle(messages);

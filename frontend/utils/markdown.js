@@ -220,6 +220,31 @@ function renderAssistantNodes(nodes) {
     }).join('');
 }
 
+function tryParseSpecialBlock(line, nextLine, lines, index) {
+    if (isCodeBlockFence(line)) {
+        const { code, language, endIndex } = collectCodeBlock(lines, index);
+        return { node: { type: 'code', lines: code, language }, newIndex: endIndex - 1 };
+    }
+
+    if (/^>/.test(line)) {
+        const { lines: quoteLines, endIndex } = collectBlockquote(lines, index);
+        return { node: { type: 'blockquote', lines: quoteLines }, newIndex: endIndex - 1 };
+    }
+
+    if (canStartTable(line, nextLine)) {
+        const { rows, endIndex } = collectTable(lines, index);
+        const headers = parseTableRow(rows[0]);
+        const dataRows = rows.slice(2).map(r => parseTableRow(r));
+        return { node: { type: 'table', headers, rows: dataRows }, newIndex: endIndex - 1 };
+    }
+
+    if (/^---+$/u.test(line)) {
+        return { node: { type: 'hr' }, newIndex: index };
+    }
+
+    return null;
+}
+
 export function renderAssistantMessage(content) {
     const normalized = normalizeAssistantContent(content);
     if (!normalized) return '<p></p>';
@@ -262,40 +287,12 @@ export function renderAssistantMessage(content) {
             continue;
         }
 
-        if (isCodeBlockFence(line)) {
+        const specialBlock = tryParseSpecialBlock(line, nextLine, lines, index);
+        if (specialBlock) {
             flushParagraph();
             flushList();
-            const { code, language, endIndex } = collectCodeBlock(lines, index);
-            nodes.push({ type: 'code', lines: code, language });
-            index = endIndex - 1;
-            continue;
-        }
-
-        if (/^>/.test(line)) {
-            flushParagraph();
-            flushList();
-            const { lines: quoteLines, endIndex } = collectBlockquote(lines, index);
-            nodes.push({ type: 'blockquote', lines: quoteLines });
-            index = endIndex - 1;
-            continue;
-        }
-
-        if (canStartTable(line, nextLine)) {
-            flushParagraph();
-            flushList();
-            const { rows, endIndex } = collectTable(lines, index);
-            const separatorIdx = 1;
-            const headers = parseTableRow(rows[0]);
-            const dataRows = rows.slice(2).map(r => parseTableRow(r));
-            nodes.push({ type: 'table', headers, rows: dataRows });
-            index = endIndex - 1;
-            continue;
-        }
-
-        if (/^---+$/u.test(line)) {
-            flushParagraph();
-            flushList();
-            nodes.push({ type: 'hr' });
+            nodes.push(specialBlock.node);
+            index = specialBlock.newIndex;
             continue;
         }
 

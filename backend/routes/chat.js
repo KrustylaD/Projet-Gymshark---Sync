@@ -19,7 +19,7 @@ function buildPromptFromHistory(history, userMessage) {
     const lines = [];
 
     for (const entry of history) {
-        if (entry === undefined || entry === null || entry.content === undefined) continue;
+        if (entry == null || entry.content === undefined) continue;
         const speaker = entry.role === 'assistant' ? 'Assistant' : 'Utilisateur';
         lines.push(`${speaker}: ${entry.content}`);
     }
@@ -65,7 +65,7 @@ function resolveConversationId(conversationId) {
  */
 function loadConversationHistory(convId) {
     const saved = getConversation(convId);
-    if (saved === undefined || saved === null) {
+    if (saved == null) {
         return [];
     }
     return saved.messages;
@@ -94,20 +94,19 @@ router.post('/api/chat', async (req, res) => {
     const body = req.body;
     let message;
     let conversationId;
-    if (body !== undefined && body !== null) {
+    if (body != null) {
         message = body.message;
         conversationId = body.conversationId;
     }
 
     // Construire un apercu du message pour les logs (sans exposer le contenu complet).
     let messagePreview = '';
-    if (message !== undefined && message !== null) {
+    if (message != null) {
         messagePreview = String(message).slice(0, 50);
     }
     logger.info(`Message recu: ${messagePreview}`);
 
-    // Sans message, impossible de solliciter le modele.
-    if (message === undefined || message === null || message === '') {
+    if (message == null || message === '') {
         return res.status(400).json({ error: 'Missing message' });
     }
 
@@ -129,8 +128,8 @@ router.post('/api/chat', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
     logger.systemInfo('En attente de reponse LLM...');
 
-    // `finished` protege contre les doubles terminaisons du flux SSE.
-    let finished = false;
+    // `isFinished` protege contre les doubles terminaisons du flux SSE.
+    let isFinished = false;
     let assistantReply = '';
     let chunkCount = 0;
 
@@ -140,7 +139,7 @@ router.post('/api/chat', async (req, res) => {
             onChunk: (chunk) => {
                 try {
                     chunkCount++;
-                    if (chunk === undefined || chunk === null || chunk === '') return;
+                    if (chunk == null || chunk === '') return;
                     assistantReply += chunk;
                     const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
@@ -159,9 +158,9 @@ router.post('/api/chat', async (req, res) => {
 
         logger.systemInfo(`Reponse LLM recue, chunks: ${chunkCount}`);
 
-        if (finished === false) {
+        if (!isFinished) {
             res.write('data: [DONE]\n\n');
-            finished = true;
+            isFinished = true;
         }
 
         // Sauvegarder l'echange complet (user + assistant) dans l'historique.
@@ -171,19 +170,19 @@ router.post('/api/chat', async (req, res) => {
     } catch (err) {
         logger.fatal(`Error in /api/chat: ${err.message || err}`, 'routes/chat.js');
 
-        if (finished === false) {
+        if (!isFinished) {
             let errorMessage = 'LLM error';
-            if (err !== undefined && err !== null && err.message !== undefined && err.message !== '') {
+            if (err != null && err.message) {
                 errorMessage = err.message;
             }
             res.write(`event: error\ndata: ${JSON.stringify({ message: errorMessage })}\n\n`);
-            finished = true;
+            isFinished = true;
         }
 
         try {
             res.end();
-        } catch (e) {
-            // noop : res.end() peut echouer si la connexion est deja fermee.
+        } catch (_e) {
+            // res.end() peut echouer si la connexion est deja fermee.
         }
     }
 });
@@ -203,7 +202,7 @@ router.get('/api/conversations', (req, res) => {
  */
 router.get('/api/conversations/:id', (req, res) => {
     const conv = getConversation(req.params.id);
-    if (conv === undefined || conv === null) {
+    if (conv == null) {
         return res.status(404).json({ error: 'Not found' });
     }
     res.json(conv);
@@ -230,7 +229,7 @@ router.get('/api/llm/health', async (req, res) => {
 
     if (health.ok === false) {
         let healthError = 'unknown';
-        if (health.error !== undefined && health.error !== null && health.error !== '') {
+        if (health.error != null && health.error !== '') {
             healthError = health.error;
         }
         logger.warn(`LLM health check failed: ${healthError}`, 'routes/chat.js');
