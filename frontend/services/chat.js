@@ -4,7 +4,8 @@
 
 import { API_BASE, dom, state } from '../constants/config.js';
 import { showStatus, setConversationMode } from '../components/feedback.js';
-import { getActiveInput, syncAllInputs } from '../components/input.js';
+import { getActiveInput } from '../components/input.js';
+import { syncAllInputs } from '../components/input-sync.js';
 import {
     appendMessage,
     setInputsDisabled,
@@ -26,6 +27,81 @@ export function setRefreshHistory(fn) {
     _refreshHistory = fn;
 }
 
+function processSSEEventBlock(block, { assistantArticle, contentNode, replyObj }) {
+    const lines = String(block || '').split(/\r?\n/);
+    let eventType = 'message';
+    const dataLines = [];
+
+    for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (!line || line.startsWith(':')) continue;
+
+        if (line.startsWith('event:')) {
+            eventType = line.slice(6).trim() || 'message';
+            continue;
+        }
+
+        if (line.startsWith('data:')) {
+            const payloadLine = line.slice(5);
+            dataLines.push(payloadLine.startsWith(' ') ? payloadLine.slice(1) : payloadLine);
+        }
+    }
+
+    const payload = dataLines.join('\n');
+    if (!payload) return;
+
+    if (eventType === 'error') {
+        let errorMessage = payload;
+
+        try {
+            const parsed = JSON.parse(payload);
+            if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+                errorMessage = parsed.message.trim();
+            }
+        } catch {
+            // Keep raw payload as fallback.
+        }
+
+        throw new Error(errorMessage);
+    }
+
+    if (payload === '[DONE]') return;
+
+    try {
+        const parsed = JSON.parse(payload);
+        if (parsed.type === 'meta' && parsed.conversationId) {
+            setConversationId(parsed.conversationId);
+            return;
+        }
+
+        if (parsed.type === 'reasoning') {
+            if (assistantArticle && contentNode && replyObj.value === '') {
+                contentNode.innerHTML = '<span class="reasoning-indicator">SYNC reflechit...</span>';
+                scrollConversationToBottom();
+            }
+            return;
+        }
+
+        if (typeof parsed?.response === 'string') {
+            replyObj.value += parsed.response;
+        } else if (typeof parsed?.text === 'string') {
+            replyObj.value += parsed.text;
+        } else if (typeof parsed?.message?.content === 'string') {
+            replyObj.value += parsed.message.content;
+        } else {
+            return;
+        }
+    } catch {
+        replyObj.value += payload.replace(/\\n/g, '\n');
+    }
+
+    if (assistantArticle && contentNode) {
+        setMessageContent(assistantArticle, contentNode, replyObj.value, 'assistant');
+        scrollConversationToBottom();
+        saveConversationSnapshot();
+    }
+}
+
 /**
  * Lit le flux SSE renvoye par le backend et met a jour le message assistant
  * au fil de l'eau.
@@ -34,87 +110,14 @@ export async function readSSEStream(response, assistantArticle) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     const contentNode = assistantArticle?.querySelector('.message-body') || null;
-    let reply = '';
+    const replyObj = { value: '' };
     let buffer = '';
 
     if (assistantArticle && contentNode) {
         setMessageContent(assistantArticle, contentNode, '', 'assistant');
     }
 
-    const processEventBlock = (block) => {
-        const lines = String(block || '').split(/\r?\n/);
-        let eventType = 'message';
-        const dataLines = [];
-
-        for (const rawLine of lines) {
-            const line = rawLine.trimEnd();
-            if (!line || line.startsWith(':')) continue;
-
-            if (line.startsWith('event:')) {
-                eventType = line.slice(6).trim() || 'message';
-                continue;
-            }
-
-            if (line.startsWith('data:')) {
-                const payloadLine = line.slice(5);
-                dataLines.push(payloadLine.startsWith(' ') ? payloadLine.slice(1) : payloadLine);
-            }
-        }
-
-        const payload = dataLines.join('\n');
-        if (!payload) return;
-
-        if (eventType === 'error') {
-            let errorMessage = payload;
-
-            try {
-                const parsed = JSON.parse(payload);
-                if (typeof parsed?.message === 'string' && parsed.message.trim()) {
-                    errorMessage = parsed.message.trim();
-                }
-            } catch {
-                // Keep raw payload as fallback.
-            }
-
-            throw new Error(errorMessage);
-        }
-
-        if (payload === '[DONE]') return;
-
-        try {
-            const parsed = JSON.parse(payload);
-            if (parsed.type === 'meta' && parsed.conversationId) {
-                setConversationId(parsed.conversationId);
-                return;
-            }
-
-            if (parsed.type === 'reasoning') {
-                if (assistantArticle && contentNode && reply === '') {
-                    contentNode.innerHTML = '<span class="reasoning-indicator">SYNC réfléchit...</span>';
-                    scrollConversationToBottom();
-                }
-                return;
-            }
-
-            if (typeof parsed?.response === 'string') {
-                reply += parsed.response;
-            } else if (typeof parsed?.text === 'string') {
-                reply += parsed.text;
-            } else if (typeof parsed?.message?.content === 'string') {
-                reply += parsed.message.content;
-            } else {
-                return;
-            }
-        } catch {
-            reply += payload.replace(/\\n/g, '\n');
-        }
-
-        if (assistantArticle && contentNode) {
-            setMessageContent(assistantArticle, contentNode, reply, 'assistant');
-            scrollConversationToBottom();
-            saveConversationSnapshot();
-        }
-    };
+    const ctx = { assistantArticle, contentNode, replyObj };
 
     while (true) {
         const { done, value } = await reader.read();
@@ -125,15 +128,15 @@ export async function readSSEStream(response, assistantArticle) {
         buffer = events.pop() || '';
 
         for (const eventBlock of events) {
-            processEventBlock(eventBlock);
+            processSSEEventBlock(eventBlock, ctx);
         }
     }
 
     if (buffer.trim()) {
-        processEventBlock(buffer);
+        processSSEEventBlock(buffer, ctx);
     }
 
-    return reply;
+    return replyObj.value;
 }
 
 export async function sendAndStream(message, successStatus) {

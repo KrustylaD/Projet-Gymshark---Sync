@@ -29,8 +29,9 @@ async function ensureFetch() {
             fetchFn = nodeFetch.default;
             return fetchFn;
         }
-    } catch {
+    } catch (_err) {
         // Dynamic import fallback — node-fetch may not be installed.
+        logger.warn('node-fetch dynamic import failed, falling back to native fetch', 'services/opencode.js');
     }
     return null;
 }
@@ -156,6 +157,80 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
     });
 }
 
+function buildChatPayload(prompt) {
+    const messages = [];
+    const systemPrompt = getSystemPrompt();
+    if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
+    return {
+        model: MODEL,
+        messages,
+        stream: true,
+        max_tokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+    };
+}
+
+function createOpenCodeLineHandler(timeout, onChunk, onReasoning) {
+    let result = '';
+    let reasoningBuf = '';
+    let hasSeenContent = false;
+
+    const ctx = { result, reasoningBuf, hasSeenContent, timeout, onChunk, onReasoning };
+
+    const handler = (line) => {
+        let value = String(line ?? '');
+        if (/^\s*data:\s*/.test(value)) value = value.replace(/^\s*data:\s*/, '');
+        if (!value || value.trim() === '[DONE]') return;
+
+        try {
+            const parsed = JSON.parse(value);
+            if (!Array.isArray(parsed.choices)) return;
+            const delta = parsed.choices[0] && parsed.choices[0].delta;
+            if (!delta) return;
+
+            if (typeof delta.content === 'string') {
+                ctx.hasSeenContent = true;
+                ctx.result += delta.content;
+                timeout.arm();
+                if (typeof onChunk === 'function') {
+                    try { onChunk(delta.content); } catch (_e) { /* noop */ }
+                }
+                return;
+            }
+
+            if (typeof delta.reasoning_content === 'string' && !ctx.hasSeenContent) {
+                if (!ctx.reasoningBuf && typeof onReasoning === 'function') {
+                    try { onReasoning(); } catch (_e) { /* noop */ }
+                }
+                ctx.reasoningBuf += delta.reasoning_content;
+                timeout.arm();
+                return;
+            }
+        } catch (_e) { /* Ignore unparseable SSE lines */ }
+    };
+
+    return { handler, ctx };
+}
+
+async function streamResponseBody(res, decoder, timeout, onLine) {
+    const hasBody = res.body != null;
+
+    if (hasBody && typeof res.body.getReader === 'function') {
+        await readWebStream(res.body, decoder, timeout, onLine);
+    } else if (hasBody && typeof res.body.on === 'function') {
+        await readNodeStream(res.body, decoder, timeout, timeout.signal, onLine);
+    } else {
+        const txt = await res.text().catch(() => '');
+        const lines = txt.split(/\r?\n/).filter(Boolean);
+        for (const line of lines) {
+            onLine(line);
+        }
+    }
+}
+
 export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, timeoutMs } = {}) {
     const resolvedFetch = await ensureFetch();
     if (resolvedFetch == null) {
@@ -169,21 +244,6 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
     const timeout = createAbortTimeout(timeoutMs);
     timeout.arm();
 
-    const systemPrompt = getSystemPrompt();
-    const messages = [];
-    if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt });
-    }
-    messages.push({ role: 'user', content: prompt });
-
-    const payload = {
-        model: MODEL,
-        messages,
-        stream: true,
-        max_tokens: MAX_TOKENS,
-        temperature: TEMPERATURE,
-    };
-
     logger.systemInfo(`Requete OpenCode → ${MODEL}`);
 
     const res = await resolvedFetch(CHAT_URL, {
@@ -193,11 +253,11 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
             Accept: 'text/event-stream, text/plain, application/json',
             Authorization: `Bearer ${API_KEY}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildChatPayload(prompt)),
         signal: timeout.signal,
     });
 
-    if (res.ok === false) {
+    if (!res.ok) {
         timeout.clear();
         const txt = await res.text().catch(() => '');
         const err = new Error(`OpenCode API error: ${res.status} ${res.statusText} - ${txt}`);
@@ -207,63 +267,10 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
     }
 
     const decoder = new TextDecoder();
-    let result = '';
-    let reasoningBuf = '';
-    let hasSeenContent = false;
-
-    const onLine = (line) => {
-        let value = String(line ?? '');
-        if (/^\s*data:\s*/.test(value)) value = value.replace(/^\s*data:\s*/, '');
-        if (!value || value.trim() === '[DONE]') return;
-
-        try {
-            const parsed = JSON.parse(value);
-            if (Array.isArray(parsed.choices)) {
-                const delta = parsed.choices[0] && parsed.choices[0].delta;
-                if (!delta) return;
-
-                if (typeof delta.content === 'string') {
-                    hasSeenContent = true;
-                    result += delta.content;
-                    timeout.arm();
-                    if (typeof onChunk === 'function') {
-                        try { onChunk(delta.content); } catch {
-                            // Callback errors should not interrupt the stream.
-                        }
-                    }
-                    return;
-                }
-
-                if (typeof delta.reasoning_content === 'string' && !hasSeenContent) {
-                    if (!reasoningBuf && typeof onReasoning === 'function') {
-                        try { onReasoning(); } catch {
-                            // Callback errors should not interrupt the stream.
-                        }
-                    }
-                    reasoningBuf += delta.reasoning_content;
-                    timeout.arm();
-                    return;
-                }
-            }
-        } catch {
-            // Ignore unparseable SSE lines (whitespace, comments, etc.).
-        }
-    };
+    const { handler: onLine, ctx } = createOpenCodeLineHandler(timeout, onChunk, onReasoning);
 
     try {
-        const hasBody = res.body != null;
-
-        if (hasBody && typeof res.body.getReader === 'function') {
-            await readWebStream(res.body, decoder, timeout, onLine);
-        } else if (hasBody && typeof res.body.on === 'function') {
-            await readNodeStream(res.body, decoder, timeout, timeout.signal, onLine);
-        } else {
-            const txt = await res.text().catch(() => '');
-            const lines = txt.split(/\r?\n/).filter(Boolean);
-            for (const line of lines) {
-                onLine(line);
-            }
-        }
+        await streamResponseBody(res, decoder, timeout, onLine);
     } catch (err) {
         if (err.name === 'AbortError' || err.message === 'AbortError') {
             const abortErr = new Error('OpenCode request aborted (timeout)');
@@ -276,16 +283,14 @@ export async function generateOpenCodeResponse(prompt, { onChunk, onReasoning, t
         timeout.clear();
     }
 
-    if (!hasSeenContent && reasoningBuf) {
-        result = reasoningBuf;
+    if (!ctx.hasSeenContent && ctx.reasoningBuf) {
+        ctx.result = ctx.reasoningBuf;
         if (typeof onChunk === 'function') {
-            try { onChunk(result); } catch {
-                // Callback errors should not interrupt the stream.
-            }
+            try { onChunk(ctx.result); } catch (_e) { /* noop */ }
         }
     }
 
-    return result;
+    return ctx.result;
 }
 
 const HEALTH_TIMEOUT_MS = 5000;
@@ -323,7 +328,7 @@ export async function getOpenCodeHealth({ timeoutMs = HEALTH_TIMEOUT_MS } = {}) 
             signal: timeout.signal,
         });
 
-        if (res.ok === false) {
+        if (!res.ok) {
             const txt = await res.text().catch(() => '');
             return {
                 ok: false,

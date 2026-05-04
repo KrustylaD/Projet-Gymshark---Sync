@@ -2,7 +2,6 @@
    MODALES (confirmation + edition)
    ============================================================ */
 
-import { dom } from '../constants/config.js';
 import { setMessageContent, saveConversationSnapshot } from './message-dom.js';
 
 function createModalBackdrop(extraClass = '') {
@@ -56,11 +55,11 @@ export function openConfirmModal({ title, message, confirmLabel = 'Confirmer', d
         messageNode.textContent = message;
         actions.className = 'modale-actions';
 
-        let settled = false;
+        let isSettled = false;
         let removeDismissHandlers = () => { };
         const close = (value) => {
-            if (settled) return;
-            settled = true;
+            if (isSettled) return;
+            isSettled = true;
             removeDismissHandlers();
             backdrop.remove();
             previousFocus?.focus?.();

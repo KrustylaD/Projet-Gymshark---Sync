@@ -2,11 +2,13 @@
    SAISIE UTILISATEUR (inputs + brouillons)
    ============================================================ */
 
-import { dom, STORAGE_KEYS, initialConversationMarkup } from '../constants/config.js';
+import { dom, initialConversationMarkup } from '../constants/config.js';
 import { showStatus, activateView, setConversationMode } from './feedback.js';
-import { storageSet, storageRemove } from '../utils/storage.js';
+import { syncAllInputs, saveDraft } from './input-sync.js';
 import { clearConversationSnapshot, setConversationId } from './message-dom.js';
 import { stopSpeechInput } from '../services/speech.js';
+
+export { syncAllInputs, saveDraft } from './input-sync.js';
 
 export function getActiveInput() {
     if (dom.secondaryInput && document.activeElement === dom.secondaryInput) {
@@ -28,20 +30,6 @@ export function syncInputBoxesState() {
         const active = value.length > 0 || document.activeElement === dom.secondaryInput;
         dom.secondaryInputBox.classList.toggle('est-active', active);
     }
-}
-
-export function saveDraft(value) {
-    if (value && value.trim()) {
-        storageSet(STORAGE_KEYS.draft, value);
-    } else {
-        storageRemove(STORAGE_KEYS.draft);
-    }
-}
-
-export function syncAllInputs(value) {
-    for (const input of dom.textInputs) input.value = value;
-    saveDraft(value);
-    syncInputBoxesState();
 }
 
 export function pulseInput(box = dom.primaryInputBox) {

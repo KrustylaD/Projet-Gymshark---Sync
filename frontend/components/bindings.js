@@ -4,7 +4,8 @@
 
 import { dom, state } from '../constants/config.js';
 import { showStatus, activateView, animateViewEntrance } from './feedback.js';
-import { injectPrompt, resetConversation, syncAllInputs, syncInputBoxesState } from './input.js';
+import { injectPrompt, resetConversation, syncInputBoxesState } from './input.js';
+import { syncAllInputs } from './input-sync.js';
 import { restoreConversationSnapshot, restoreDraft } from './message-dom.js';
 import { sendMessage } from '../services/chat.js';
 import { refreshHistory, loadConversation } from '../services/history.js';

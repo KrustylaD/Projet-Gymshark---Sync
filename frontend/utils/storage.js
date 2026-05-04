@@ -2,7 +2,7 @@
    STOCKAGE CLIENT (session/local storage)
    ============================================================ */
 
-import { STORAGE_KEYS } from '../constants/config.js';
+// STORAGE_KEYS imported by consuming modules
 
 export function storageGet(key, fallback = null) {
     try {

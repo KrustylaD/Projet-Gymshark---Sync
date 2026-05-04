@@ -7,7 +7,7 @@ import { getAssistantDisplayContent, renderAssistantMessage } from '../utils/mar
 import { showStatus } from './feedback.js';
 import { setConversationMode } from './feedback.js';
 import { storageGet, storageSet, storageRemove } from '../utils/storage.js';
-import { syncAllInputs } from './input.js';
+import { syncAllInputs } from './input-sync.js';
 
 export function setInputsDisabled(disabled) {
     for (const input of dom.textInputs) input.disabled = disabled;

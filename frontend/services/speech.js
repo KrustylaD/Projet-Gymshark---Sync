@@ -4,7 +4,7 @@
 
 import { dom, state, SpeechRecognitionAPI } from '../constants/config.js';
 import { showStatus } from '../components/feedback.js';
-import { syncAllInputs } from '../components/input.js';
+import { syncAllInputs } from '../components/input-sync.js';
 
 export function updateMicButtons(active) {
     for (const button of dom.micButtons) {

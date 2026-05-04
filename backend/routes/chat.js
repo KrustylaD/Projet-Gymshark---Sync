@@ -63,8 +63,8 @@ function resolveConversationId(conversationId) {
  * Charge l'historique complet d'une conversation depuis le fichier.
  * Retourne un tableau vide si la conversation n'existe pas encore.
  */
-function loadConversationHistory(convId) {
-    const saved = getConversation(convId);
+async function loadConversationHistory(convId) {
+    const saved = await getConversation(convId);
     if (saved == null) {
         return [];
     }
@@ -74,11 +74,11 @@ function loadConversationHistory(convId) {
 /**
  * Ajoute le message utilisateur et la reponse assistant a l'historique, puis sauvegarde.
  */
-function saveUpdatedHistory(convId, history, userMessage, assistantReply) {
+async function saveUpdatedHistory(convId, history, userMessage, assistantReply) {
     const nextHistory = history.slice();
     nextHistory.push({ role: 'user', content: userMessage });
     nextHistory.push({ role: 'assistant', content: assistantReply.trim() });
-    saveConversation(convId, nextHistory);
+    await saveConversation(convId, nextHistory);
 }
 
 /* ============================================================
@@ -111,7 +111,7 @@ router.post('/api/chat', async (req, res) => {
     }
 
     const convId = resolveConversationId(conversationId);
-    const history = loadConversationHistory(convId);
+    const history = await loadConversationHistory(convId);
     const trimmedHistory = trimHistory(history);
     const prompt = buildPromptFromHistory(trimmedHistory, message);
 
@@ -164,7 +164,7 @@ router.post('/api/chat', async (req, res) => {
         }
 
         // Sauvegarder l'echange complet (user + assistant) dans l'historique.
-        saveUpdatedHistory(convId, history, message, assistantReply);
+        await saveUpdatedHistory(convId, history, message, assistantReply);
         res.end();
 
     } catch (err) {
@@ -192,16 +192,17 @@ router.post('/api/chat', async (req, res) => {
  * Retourne la liste de toutes les conversations sans leurs messages,
  * triees par date de mise a jour decroissante.
  */
-router.get('/api/conversations', (req, res) => {
-    res.json(listConversations());
+router.get('/api/conversations', async (req, res) => {
+    const conversations = await listConversations();
+    res.json(conversations);
 });
 
 /**
  * GET /api/conversations/:id
  * Retourne une conversation complete (avec messages) par son identifiant.
  */
-router.get('/api/conversations/:id', (req, res) => {
-    const conv = getConversation(req.params.id);
+router.get('/api/conversations/:id', async (req, res) => {
+    const conv = await getConversation(req.params.id);
     if (conv == null) {
         return res.status(404).json({ error: 'Not found' });
     }
@@ -212,9 +213,9 @@ router.get('/api/conversations/:id', (req, res) => {
  * DELETE /api/conversations/:id
  * Supprime une conversation par son identifiant.
  */
-router.delete('/api/conversations/:id', (req, res) => {
-    const deleted = deleteConversation(req.params.id);
-    if (deleted === false) {
+router.delete('/api/conversations/:id', async (req, res) => {
+    const deleted = await deleteConversation(req.params.id);
+    if (!deleted) {
         return res.status(404).json({ error: 'Not found' });
     }
     res.json({ ok: true });
@@ -227,7 +228,7 @@ router.delete('/api/conversations/:id', (req, res) => {
 router.get('/api/llm/health', async (req, res) => {
     const health = await getHealth({ timeoutMs: 5000 });
 
-    if (health.ok === false) {
+    if (!health.ok) {
         let healthError = 'unknown';
         if (health.error != null && health.error !== '') {
             healthError = health.error;
