@@ -6,7 +6,7 @@ Two independent apps, no shared tooling:
 - **`backend/`** — Node.js Express server (ESM), SSE streaming to Ollama LLM
 - **`frontend/`** — Vanilla HTML/CSS/JS SPA, served as static files
 
-Backend depends on a **running Ollama instance** (default `http://localhost:11434`, model `phi3:mini`).
+Backend depends on a **running Ollama instance** (default `http://localhost:11434`, model `phi3:mini`) — or set `LLM_PROVIDER=opencode` to use the OpenCode cloud API instead.
 
 ## Quick start
 
@@ -24,12 +24,18 @@ cd frontend && python3 -m http.server 8080                       # → :8080
 
 Copy `backend/.env.example` to `backend/.env` before first run. `.env` is gitignored.
 
-| Variable | Default |
-|---|---|
-| `OLLAMA_URL` | `http://localhost:11434` |
-| `OLLAMA_MODEL` | `phi3:mini` |
-| `OLLAMA_TIMEOUT` | `60000` (inactivity timeout, ms) |
-| `PORT` | `3000` |
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | Provider: `ollama` (local) or `opencode` (cloud API) |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL` | `phi3:mini` | Ollama model name |
+| `OPENCODE_API_KEY` | — | OpenCode API key (from https://opencode.ai/auth) |
+| `OPENCODE_MODEL` | `deepseek-v4-flash` | OpenCode model ID |
+| `OPENCODE_API_URL` | `https://opencode.ai/zen/go/v1` | OpenCode API base URL |
+| `OPENCODE_MAX_TOKENS` | `4096` | Max tokens per response |
+| `OPENCODE_TEMPERATURE` | `0.6` | Model temperature (0.0–2.0) |
+| `OLLAMA_TIMEOUT` | `60000` | Inactivity timeout (ms, empty = disabled) |
+| `PORT` | `3000` | HTTP server port |
 
 ## Commands
 
@@ -45,7 +51,9 @@ Tests use Node 18+ native `fetch`. All test files live under `backend/__tests__/
 - **SSE streaming**: `POST /api/chat` returns `text/event-stream`. The first SSE event is a `meta` JSON with `conversationId`. Stream ends with `data: [DONE]`.
 - **System prompt**: loaded from `backend/system_prompt` (plain text file). Cached by mtime. If unreadable, the service continues with an empty prompt — no crash.
 - **History**: `MAX_HISTORY_TURNS = 8` (last 8 user/assistant pairs). Persisted to `data/conversations.json` (gitignored, auto-created).
-- **Ollama service**: prepends system prompt to every user message before sending to Ollama. Supports both native `fetch` (Node 18+) and `node-fetch` fallback.
+- **LLM provider selector** (`services/llm.js`): reads `LLM_PROVIDER` env var and routes to `ollama.js` or `opencode.js`. Both services export `generateResponse(prompt, { onChunk, timeoutMs })` and `getHealth({ timeoutMs })`.
+- **Ollama service** (`services/ollama.js`): prepends system prompt to every user message before sending to Ollama `/api/generate`. Supports both native `fetch` (Node 18+) and `node-fetch` fallback.
+- **OpenCode service** (`services/opencode.js`): calls OpenAI-compatible chat completions API (`/v1/chat/completions`). Requires `OPENCODE_API_KEY`. Sends system prompt as `system` message and user prompt as `user` message.
 - **Frontend**: hardcodes `API_BASE = 'http://localhost:3000'` in `frontend/app.js:9`. Has a 2-second artificial delay before starting SSE read (for typing indicator visibility).
 
 ## Testing quirks

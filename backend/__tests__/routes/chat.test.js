@@ -2,9 +2,9 @@ import { jest } from '@jest/globals';
 import http from 'http';
 import express from 'express';
 
-const ollamaMock = {
-    generateOllamaResponse: jest.fn(),
-    getOllamaHealth: jest.fn(),
+const llmMock = {
+    generateResponse: jest.fn(),
+    getHealth: jest.fn(),
 };
 
 const historyMock = {
@@ -21,10 +21,9 @@ const loggerMock = {
     warn: jest.fn(),
 };
 
-// Les mocks sont definis avant l'import du routeur pour qu'ils soient appliques.
-jest.unstable_mockModule('../../services/ollama.js', () => ({
-    generateOllamaResponse: ollamaMock.generateOllamaResponse,
-    getOllamaHealth: ollamaMock.getOllamaHealth,
+jest.unstable_mockModule('../../services/llm.js', () => ({
+    generateResponse: llmMock.generateResponse,
+    getHealth: llmMock.getHealth,
 }));
 
 jest.unstable_mockModule('../../services/history.js', () => ({
@@ -38,10 +37,6 @@ jest.unstable_mockModule('../../logger.js', () => ({
     default: loggerMock,
 }));
 
-// -------------------------------------------------------------------
-// Serveur de test : demarre une vraie instance Express sur un port
-// aleatoire pour tester les routes en conditions reelles.
-// -------------------------------------------------------------------
 let server;
 let baseUrl;
 
@@ -53,7 +48,6 @@ beforeAll(async () => {
     app.use(chatRouter);
     await new Promise((resolve) => {
         server = http.createServer(app);
-        // Port 0 = OS choisit un port libre automatiquement.
         server.listen(0, () => {
             baseUrl = `http://localhost:${server.address().port}`;
             resolve();
@@ -70,32 +64,25 @@ afterAll(async () => {
 beforeEach(() => {
     jest.clearAllMocks();
 
-    // Valeurs par defaut des mocks de services pour chaque test.
     historyMock.getConversation.mockReturnValue(null);
     historyMock.saveConversation.mockImplementation(() => { });
     historyMock.listConversations.mockReturnValue([]);
     historyMock.deleteConversation.mockReturnValue(true);
 
-    // generateOllamaResponse appelle onChunk avec un fragment, puis se termine.
-    ollamaMock.generateOllamaResponse.mockImplementation(async (prompt, options = {}) => {
+    llmMock.generateResponse.mockImplementation(async (prompt, options = {}) => {
         if (typeof options.onChunk === 'function') {
             options.onChunk('Reponse test');
         }
         return 'Reponse test';
     });
 
-    ollamaMock.getOllamaHealth.mockResolvedValue({
+    llmMock.getHealth.mockResolvedValue({
         ok: true,
         url: 'http://localhost:11434',
         model: 'phi3:mini',
     });
 });
 
-// -------------------------------------------------------------------
-// Utilitaires pour les tests SSE
-// -------------------------------------------------------------------
-
-// Envoie une requete POST /api/chat et retourne la reponse.
 function postChat(body) {
     return fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
@@ -104,7 +91,6 @@ function postChat(body) {
     });
 }
 
-// Extrait le conversationId depuis le premier evenement meta SSE.
 function extractConversationId(sseText) {
     const lignes = sseText.split('\n');
     for (const ligne of lignes) {
@@ -116,10 +102,6 @@ function extractConversationId(sseText) {
     }
     return null;
 }
-
-// ===================================================================
-// POST /api/chat
-// ===================================================================
 
 describe('POST /api/chat', () => {
 
@@ -151,7 +133,6 @@ describe('POST /api/chat', () => {
         const text = await response.text();
         const convId = extractConversationId(text);
 
-        // Un ID genere automatiquement commence toujours par "conv_".
         expect(convId).toMatch(/^conv_\d+$/);
     });
 
@@ -173,7 +154,7 @@ describe('POST /api/chat', () => {
     });
 
     test('doit envoyer un evenement error SSE si le LLM echoue', async () => {
-        ollamaMock.generateOllamaResponse.mockRejectedValue(new Error('LLM indisponible'));
+        llmMock.generateResponse.mockRejectedValue(new Error('LLM indisponible'));
 
         const response = await postChat({ message: 'Bonjour' });
         const text = await response.text();
@@ -183,10 +164,6 @@ describe('POST /api/chat', () => {
     });
 
 });
-
-// ===================================================================
-// GET /api/conversations
-// ===================================================================
 
 describe('GET /api/conversations', () => {
 
@@ -204,10 +181,6 @@ describe('GET /api/conversations', () => {
     });
 
 });
-
-// ===================================================================
-// GET /api/conversations/:id
-// ===================================================================
 
 describe('GET /api/conversations/:id', () => {
 
@@ -233,10 +206,6 @@ describe('GET /api/conversations/:id', () => {
 
 });
 
-// ===================================================================
-// DELETE /api/conversations/:id
-// ===================================================================
-
 describe('DELETE /api/conversations/:id', () => {
 
     test('doit retourner 404 si la conversation n\'existe pas', async () => {
@@ -260,14 +229,10 @@ describe('DELETE /api/conversations/:id', () => {
 
 });
 
-// ===================================================================
-// GET /api/llm/health
-// ===================================================================
-
 describe('GET /api/llm/health', () => {
 
-    test('doit retourner 200 si Ollama est disponible', async () => {
-        ollamaMock.getOllamaHealth.mockResolvedValue({ ok: true, url: 'http://localhost:11434', model: 'phi3:mini' });
+    test('doit retourner 200 si le LLM est disponible', async () => {
+        llmMock.getHealth.mockResolvedValue({ ok: true, url: 'http://localhost:11434', model: 'phi3:mini' });
 
         const response = await fetch(`${baseUrl}/api/llm/health`);
 
@@ -275,8 +240,8 @@ describe('GET /api/llm/health', () => {
         await response.json();
     });
 
-    test('doit retourner 503 si Ollama est indisponible', async () => {
-        ollamaMock.getOllamaHealth.mockResolvedValue({ ok: false, error: 'Connection refused' });
+    test('doit retourner 503 si le LLM est indisponible', async () => {
+        llmMock.getHealth.mockResolvedValue({ ok: false, error: 'Connection refused' });
 
         const response = await fetch(`${baseUrl}/api/llm/health`);
 

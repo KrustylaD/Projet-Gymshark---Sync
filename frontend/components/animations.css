@@ -276,3 +276,16 @@
     animation-delay: 0.4s;
 }
 
+.reasoning-indicator {
+    display: inline-block;
+    color: var(--text-muted, #888);
+    font-style: italic;
+    font-size: 0.9em;
+    animation: reasoning-pulse 2s ease-in-out infinite;
+}
+
+@keyframes reasoning-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+

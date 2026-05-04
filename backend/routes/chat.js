@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateOllamaResponse, getOllamaHealth } from '../services/ollama.js';
+import { generateResponse, getHealth } from '../services/llm.js';
 import { getConversation, saveConversation, deleteConversation, listConversations } from '../services/history.js';
 import logger from '../logger.js';
 
@@ -127,7 +127,7 @@ router.post('/api/chat', async (req, res) => {
 
     // Envoyer l'identifiant de conversation au client en premier evenement.
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
-    logger.systemInfo('En attente de reponse Ollama...');
+    logger.systemInfo('En attente de reponse LLM...');
 
     // `finished` protege contre les doubles terminaisons du flux SSE.
     let finished = false;
@@ -135,23 +135,29 @@ router.post('/api/chat', async (req, res) => {
     let chunkCount = 0;
 
     try {
-        await generateOllamaResponse(prompt, {
+        await generateResponse(prompt, {
             timeoutMs,
             onChunk: (chunk) => {
                 try {
                     chunkCount++;
                     if (chunk === undefined || chunk === null || chunk === '') return;
                     assistantReply += chunk;
-                    // Echapper les retours a la ligne pour garder un evenement SSE valide.
                     const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
                     logger.warn(`Erreur chunk: ${e.message}`, 'routes/chat.js');
                 }
             },
+            onReasoning: () => {
+                try {
+                    res.write(`data: ${JSON.stringify({ type: 'reasoning' })}\n\n`);
+                } catch (e) {
+                    logger.warn(`Erreur onReasoning: ${e.message}`, 'routes/chat.js');
+                }
+            },
         });
 
-        logger.systemInfo(`Reponse Ollama recue, chunks: ${chunkCount}`);
+        logger.systemInfo(`Reponse LLM recue, chunks: ${chunkCount}`);
 
         if (finished === false) {
             res.write('data: [DONE]\n\n');
@@ -217,21 +223,21 @@ router.delete('/api/conversations/:id', (req, res) => {
 
 /**
  * GET /api/llm/health
- * Health check du serveur Ollama. Retourne 200 si OK, 503 sinon.
+ * Health check du serveur LLM. Retourne 200 si OK, 503 sinon.
  */
 router.get('/api/llm/health', async (req, res) => {
-    const health = await getOllamaHealth({ timeoutMs: 5000 });
+    const health = await getHealth({ timeoutMs: 5000 });
 
     if (health.ok === false) {
         let healthError = 'unknown';
         if (health.error !== undefined && health.error !== null && health.error !== '') {
             healthError = health.error;
         }
-        logger.warn(`Ollama health check failed: ${healthError}`, 'routes/chat.js');
+        logger.warn(`LLM health check failed: ${healthError}`, 'routes/chat.js');
         return res.status(503).json(health);
     }
 
-    logger.systemInfo('Ollama health check OK');
+    logger.systemInfo('LLM health check OK');
     return res.status(200).json(health);
 });
 
@@ -248,7 +254,7 @@ router.get('/api/test-stream', async (req, res) => {
     const prompt = "Say hello in 5 words";
 
     try {
-        await generateOllamaResponse(prompt, {
+        await generateResponse(prompt, {
             timeoutMs: 15000,
             onChunk: (chunk) => {
                 chunkCount++;

@@ -88,6 +88,14 @@ export async function readSSEStream(response, assistantArticle) {
                 return;
             }
 
+            if (parsed.type === 'reasoning') {
+                if (assistantArticle && contentNode && reply === '') {
+                    contentNode.innerHTML = '<span class="reasoning-indicator">SYNC réfléchit...</span>';
+                    scrollConversationToBottom();
+                }
+                return;
+            }
+
             if (typeof parsed?.response === 'string') {
                 reply += parsed.response;
             } else if (typeof parsed?.text === 'string') {
