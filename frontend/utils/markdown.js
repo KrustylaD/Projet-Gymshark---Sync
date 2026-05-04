@@ -68,7 +68,10 @@ function renderInlineMarkdown(text) {
         .replace(/\*\*([^\n*][\s\S]*?)\*\*/g, '<strong>$1</strong>')
         .replace(/__([^\n_][\s\S]*?)__/g, '<strong>$1</strong>')
         .replace(/\*(?!\s)([^*\n]+?)\*/g, '<em>$1</em>')
-        .replace(/_(?!\s)([^_\n]+?)_/g, '<em>$1</em>');
+        .replace(/_(?!\s)([^_\n]+?)_/g, '<em>$1</em>')
+        .replace(/~~([^\n~]+?)~~/g, '<del>$1</del>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
 
     for (const [index, snippet] of codeTokens.entries()) {
         html = html.replace(`%%CODE_TOKEN_${index}%%`, snippet);
@@ -114,6 +117,35 @@ function collectTable(lines, startIndex) {
         i++;
     }
     return { rows, endIndex: i };
+}
+
+function isCodeBlockFence(line) {
+    return /^```[a-zA-Z0-9_-]*$/.test(line.trim());
+}
+
+function collectCodeBlock(lines, startIndex) {
+    const fence = lines[startIndex].trim();
+    const language = fence.replace(/^```/, '') || '';
+    const codeLines = [];
+    let i = startIndex + 1;
+    while (i < lines.length) {
+        if (/^```/.test(lines[i].trim())) {
+            return { code: codeLines, language, endIndex: i + 1 };
+        }
+        codeLines.push(lines[i]);
+        i++;
+    }
+    return { code: codeLines, language, endIndex: i };
+}
+
+function collectBlockquote(lines, startIndex) {
+    const quoteLines = [];
+    let i = startIndex;
+    while (i < lines.length && /^>/.test(lines[i].trim())) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+        i++;
+    }
+    return { lines: quoteLines, endIndex: i };
 }
 
 function getMarkdownHeading(line) {
@@ -167,6 +199,17 @@ function renderAssistantNodes(nodes) {
             return `<div class="table-wrapper"><table>${thead}${tbody}</table></div>`;
         }
 
+        if (node.type === 'code') {
+            const langLabel = node.language ? `<span class="code-lang">${escapeHtml(node.language)}</span>` : '';
+            const codeContent = node.lines.join('\n');
+            return `<div class="code-block">${langLabel}<pre><code>${escapeHtml(codeContent)}</code></pre></div>`;
+        }
+
+        if (node.type === 'blockquote') {
+            const inner = node.lines.map(l => renderInlineMarkdown(l)).join('<br>');
+            return `<blockquote>${inner}</blockquote>`;
+        }
+
         if (node.type === 'paragraph') {
             const className = node.isQuestion ? ' class="assistant-question"' : '';
             const content = node.lines.map((line) => renderInlineMarkdown(line)).join('<br>');
@@ -216,6 +259,24 @@ export function renderAssistantMessage(content) {
         if (!line) {
             flushParagraph();
             flushList();
+            continue;
+        }
+
+        if (isCodeBlockFence(line)) {
+            flushParagraph();
+            flushList();
+            const { code, language, endIndex } = collectCodeBlock(lines, index);
+            nodes.push({ type: 'code', lines: code, language });
+            index = endIndex - 1;
+            continue;
+        }
+
+        if (/^>/.test(line)) {
+            flushParagraph();
+            flushList();
+            const { lines: quoteLines, endIndex } = collectBlockquote(lines, index);
+            nodes.push({ type: 'blockquote', lines: quoteLines });
+            index = endIndex - 1;
             continue;
         }
 

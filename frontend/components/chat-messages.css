@@ -191,6 +191,28 @@
     color: #dce4ff;
 }
 
+.message-assistant .message-body del {
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: line-through;
+}
+
+.message-assistant .message-body a {
+    color: #97a8ff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+}
+
+.message-assistant .message-body a:hover {
+    color: #c0ccff;
+}
+
+.message-assistant .message-body img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+}
+
 .message-assistant .message-body code {
     display: inline-block;
     padding: 2px 8px;
@@ -253,6 +275,53 @@
 
 .message-assistant .message-body tbody tr:hover {
     background: rgba(255, 255, 255, 0.02);
+}
+
+.message-assistant .message-body .code-block {
+    position: relative;
+    margin: 0.6rem 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.message-assistant .message-body .code-lang {
+    display: inline-block;
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.35);
+    font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.message-assistant .message-body .code-block pre {
+    margin: 0;
+    padding: 1rem 1rem;
+    overflow-x: auto;
+}
+
+.message-assistant .message-body .code-block code {
+    font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-size: 0.85em;
+    line-height: 1.6;
+    color: #e2e8f0;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+}
+
+.message-assistant .message-body blockquote {
+    margin: 0.6rem 0;
+    padding: 0.6rem 1rem;
+    border-left: 3px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 0 6px 6px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
 }
 
 .message-action-bar {
