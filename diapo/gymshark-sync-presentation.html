@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Gymshark Sync — Assistant IA pour Coachs Sportifs</title>
+
+<!-- ===========================================
+     TYPOGRAPHY: Cormorant (display serif) + IBM Plex Sans (body)
+     Dark Botanical preset adapted to Gymshark palette
+     =========================================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,400;0,600;0,700;1,400;1,600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* ===========================================
+   CSS CUSTOM PROPERTIES — Dark Botanical + Gymshark
+   Change these to recolor the entire deck
+   =========================================== */
+:root {
+  /* Colors */
+  --bg-primary: #0b0b0b;
+  --bg-elevated: #111111;
+  --text-primary: #e8e4df;
+  --text-secondary: #8a8580;
+  --text-muted: #555555;
+
+  /* Gymshark accents */
+  --accent-blue: #3B82F6;
+  --accent-blue-glow: rgba(59, 130, 246, 0.12);
+  --accent-red: #DC2626;
+  --accent-red-glow: rgba(220, 38, 38, 0.10);
+
+  /* Typography */
+  --font-display: 'Cormorant', serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+
+  /* Responsive scale */
+  --title-size: clamp(1.8rem, 5.5vw, 4.5rem);
+  --h2-size: clamp(1.3rem, 3.5vw, 2.8rem);
+  --h3-size: clamp(1rem, 2.5vw, 1.6rem);
+  --body-size: clamp(0.75rem, 1.5vw, 1.1rem);
+  --small-size: clamp(0.65rem, 1vw, 0.85rem);
+  --code-size: clamp(0.65rem, 1.2vw, 0.9rem);
+
+  /* Spacing */
+  --slide-padding: clamp(1.5rem, 5vw, 5rem);
+  --content-gap: clamp(0.5rem, 2vw, 2rem);
+  --element-gap: clamp(0.25rem, 1vw, 1rem);
+
+  /* Animation */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration: 0.7s;
+}
+
+/* ===========================================
+   BASE RESET
+   =========================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ===========================================
+   VIEWPORT FITTING: MANDATORY BASE STYLES
+   Included in full from viewport-base.css
+   =========================================== */
+
+/* 1. Lock html/body to viewport */
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+html {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  background: var(--bg-primary);
+}
+
+/* 2. Each slide = exact viewport height */
+.slide {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden; /* CRITICAL */
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg-primary);
+}
+
+/* 3. Content container */
+.slide-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-height: 100%;
+  overflow: hidden;
+  padding: var(--slide-padding);
+  position: relative;
+  z-index: 1;
+}
+
+/* 4. Typography responsive scaling */
+.slide h1, .title-main {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--title-size);
+  color: var(--text-primary);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+.slide h1 em, .accent-text {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent-blue);
+}
+.slide h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--h2-size);
+  color: var(--text-primary);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.slide h3 {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--h3-size);
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.slide p, .slide li {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: var(--body-size);
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* 5. Cards/containers */
+.card, .container, .content-box {
+  max-width: min(90vw, 1000px);
+  max-height: min(80vh, 700px);
+}
+
+/* 6. Lists */
+.bullet-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1.2vh, 0.9rem);
+}
+.bullet-list li {
+  font-size: var(--body-size);
+  line-height: 1.45;
+  padding-left: clamp(1rem, 2vw, 1.8rem);
+  position: relative;
+}
+.bullet-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: clamp(5px, 0.6vw, 8px);
+  height: clamp(5px, 0.6vw, 8px);
+  background: var(--accent-blue);
+  border-radius: 50%;
+}
+
+/* 7. Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: clamp(0.5rem, 1.5vw, 1.2rem);
+  max-width: 100%;
+}
+
+/* 8. Images */
+img, .image-container {
+  max-width: 100%;
+  max-height: min(50vh, 400px);
+  object-fit: contain;
+}
+
+/* ===========================================
+   RESPONSIVE BREAKPOINTS
+   =========================================== */
+@media (max-height: 700px) {
+  :root {
+    --slide-padding: clamp(0.75rem, 3vw, 2rem);
+    --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+    --title-size: clamp(1.4rem, 4.5vw, 2.5rem);
+    --h2-size: clamp(1.1rem, 3vw, 1.8rem);
+  }
+}
+@media (max-height: 600px) {
+  :root {
+    --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+    --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+    --title-size: clamp(1.2rem, 4vw, 2rem);
+    --body-size: clamp(0.7rem, 1.2vw, 0.9rem);
+  }
+  .nav-dots, .progress-bar { display: none; }
+}
+@media (max-height: 500px) {
+  :root {
+    --slide-padding: clamp(0.4rem, 2vw, 1rem);
+    --title-size: clamp(1rem, 3.5vw, 1.5rem);
+    --h2-size: clamp(0.9rem, 2.5vw, 1.3rem);
+    --body-size: clamp(0.65rem, 1vw, 0.8rem);
+  }
+}
+@media (max-width: 600px) {
+  :root {
+    --title-size: clamp(1.5rem, 7vw, 2.5rem);
+  }
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* ===========================================
+   REDUCED MOTION
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.2s !important;
+  }
+  html { scroll-behavior: auto; }
+}
+
+/* ===========================================
+   DARK BOTANICAL: ABSTRACT SHAPES
+   Blurred gradient orbs for atmosphere
+   =========================================== */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+.orb-blue {
+  background: radial-gradient(circle, var(--accent-blue-glow) 0%, transparent 70%);
+  width: clamp(200px, 40vw, 500px);
+  height: clamp(200px, 40vw, 500px);
+  top: -10%;
+  right: -8%;
+  animation: orbFloat 12s ease-in-out infinite;
+}
+.orb-red {
+  background: radial-gradient(circle, var(--accent-red-glow) 0%, transparent 70%);
+  width: clamp(180px, 35vw, 450px);
+  height: clamp(180px, 35vw, 450px);
+  bottom: -12%;
+  left: -6%;
+  animation: orbFloat 14s ease-in-out infinite reverse;
+}
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -15px) scale(1.08); }
+  66% { transform: translate(-15px, 10px) scale(0.93); }
+}
+
+/* Thin vertical accent bar */
+.accent-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5px;
+  height: clamp(50px, 10vh, 120px);
+  background: linear-gradient(to bottom, transparent, var(--accent-blue), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.accent-bar.left { left: clamp(2rem, 5vw, 5rem); }
+.accent-bar.right { right: clamp(2rem, 5vw, 5rem); }
+
+/* ===========================================
+   ANIMATIONS
+   =========================================== */
+.reveal {
+  opacity: 0;
+  transform: translateY(25px);
+  transition:
+    opacity var(--duration) var(--ease-out-expo),
+    transform var(--duration) var(--ease-out-expo);
+}
+.slide.visible .reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered children */
+.slide-content > .reveal:nth-child(1) { transition-delay: 0.05s; }
+.slide-content > .reveal:nth-child(2) { transition-delay: 0.15s; }
+.slide-content > .reveal:nth-child(3) { transition-delay: 0.25s; }
+.slide-content > .reveal:nth-child(4) { transition-delay: 0.35s; }
+.slide-content > .reveal:nth-child(5) { transition-delay: 0.45s; }
+.slide-content > .reveal:nth-child(6) { transition-delay: 0.55s; }
+
+/* Specific reveals for grids */
+.grid .reveal:nth-child(1) { transition-delay: 0.05s; }
+.grid .reveal:nth-child(2) { transition-delay: 0.12s; }
+.grid .reveal:nth-child(3) { transition-delay: 0.19s; }
+.grid .reveal:nth-child(4) { transition-delay: 0.26s; }
+.grid .reveal:nth-child(5) { transition-delay: 0.33s; }
+.grid .reveal:nth-child(6) { transition-delay: 0.40s; }
+
+/* Overline reveal */
+.reveal-overline {
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 0.5s var(--ease-out-expo), transform 0.5s var(--ease-out-expo);
+}
+.slide.visible .reveal-overline {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.1s;
+}
+
+/* ===========================================
+   OVERLINE (section label)
+   =========================================== */
+.overline {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--small-size);
+  color: var(--accent-blue);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: clamp(0.4rem, 1.2vh, 1rem);
+}
+
+/* ===========================================
+   SLIDE LAYOUTS
+   =========================================== */
+
+/* Title slide */
+.title-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.title-slide .slide-content {
+  align-items: center;
+  gap: clamp(0.5rem, 1.5vh, 1.2rem);
+}
+.title-slide .subtitle {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: clamp(0.85rem, 1.8vw, 1.25rem);
+  color: var(--text-secondary);
+  max-width: min(70vw, 500px);
+}
+.title-slide .tagline {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(0.9rem, 2vw, 1.3rem);
+  color: var(--accent-blue);
+  margin-top: clamp(0.3rem, 0.8vh, 0.6rem);
+}
+
+/* Feature grid cards */
+.feature-card {
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 4px;
+  padding: clamp(0.8rem, 1.5vw, 1.3rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.6vh, 0.5rem);
+  transition: border-color 0.3s ease;
+}
+.feature-card:hover {
+  border-color: rgba(59,130,246,0.25);
+}
+.feature-card .card-icon {
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  color: var(--accent-blue);
+  margin-bottom: clamp(0.2rem, 0.3vh, 0.3rem);
+}
+.feature-card h3 {
+  margin: 0;
+}
+.feature-card p {
+  font-size: var(--small-size);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Code block */
+.code-block {
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 2px solid var(--accent-blue);
+  border-radius: 0 4px 4px 0;
+  padding: clamp(0.6rem, 1.2vw, 1.2rem);
+  overflow-x: auto;
+  max-width: 100%;
+}
+.code-block code {
+  font-family: 'IBM Plex Sans', monospace;
+  font-size: var(--code-size);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  white-space: pre;
+}
+.code-block .keyword { color: var(--accent-blue); }
+.code-block .string { color: #a8c7fa; }
+.code-block .comment { color: #555; }
+
+/* Architecture diagram (CSS-only) */
+.arch-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.8rem, 2vw, 1.5rem);
+  flex-wrap: wrap;
+  max-width: min(90vw, 900px);
+  margin: 0 auto;
+}
+.arch-block {
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: clamp(0.8rem, 1.5vw, 1.5rem);
+  text-align: center;
+  min-width: clamp(120px, 18vw, 180px);
+  transition: border-color 0.3s ease;
+}
+.arch-block:hover { border-color: rgba(59,130,246,0.25); }
+.arch-block .arch-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--body-size);
+  color: var(--text-primary);
+}
+.arch-block .arch-tech {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: var(--small-size);
+  color: var(--accent-blue);
+  margin-top: clamp(0.2rem, 0.4vh, 0.4rem);
+}
+.arch-arrow {
+  font-family: var(--font-body);
+  font-size: clamp(0.8rem, 1.5vw, 1.2rem);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Closing slide */
+.closing-slide .slide-content {
+  align-items: center;
+  text-align: center;
+  gap: clamp(0.5rem, 1.5vh, 1.2rem);
+}
+.closing-slide .github-link {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--body-size);
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: clamp(0.4rem, 0.8vw, 0.6rem) clamp(0.8rem, 1.5vw, 1.2rem);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  transition: border-color 0.3s ease, color 0.3s ease;
+}
+.closing-slide .github-link:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* ===========================================
+   PROGRESS BAR
+   =========================================== */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent-blue);
+  z-index: 9999;
+  transition: width 0.2s ease;
+}
+
+/* ===========================================
+   NAVIGATION DOTS
+   =========================================== */
+.nav-dots {
+  position: fixed;
+  right: clamp(0.8rem, 2vw, 1.5rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 0.8vh, 0.6rem);
+  z-index: 9998;
+}
+.nav-dot {
+  width: clamp(6px, 0.8vw, 10px);
+  height: clamp(6px, 0.8vw, 10px);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.3s ease;
+  padding: 0;
+}
+.nav-dot:hover {
+  background: rgba(59,130,246,0.4);
+  transform: scale(1.3);
+}
+.nav-dot.active {
+  background: var(--accent-blue);
+  transform: scale(1.2);
+}
+
+/* ===========================================
+   INLINE EDITING
+   =========================================== */
+.edit-hotzone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  z-index: 10000;
+  cursor: pointer;
+}
+.edit-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  z-index: 10001;
+}
+.edit-toggle.show,
+.edit-toggle.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.edit-toggle.active {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+.edit-toggle:hover {
+  border-color: rgba(59,130,246,0.5);
+}
+
+.edit-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: clamp(0.3rem, 0.6vh, 0.5rem);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid rgba(59,130,246,0.2);
+  text-align: center;
+  z-index: 10002;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.edit-banner.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.edit-banner span {
+  font-family: var(--font-body);
+  font-size: var(--small-size);
+  color: var(--accent-blue);
+}
+
+body.edit-active [contenteditable="true"] {
+  outline: 1px dashed rgba(59,130,246,0.3);
+  outline-offset: 4px;
+  border-radius: 2px;
+  cursor: text;
+}
+body.edit-active [contenteditable="true"]:focus {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 4px;
+}
+
+/* ===========================================
+   AUTHOR OVERLAY (bottom-right on title slide)
+   =========================================== */
+.author-tag {
+  position: absolute;
+  bottom: clamp(1.5rem, 4vh, 3rem);
+  right: clamp(1.5rem, 4vw, 3rem);
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: var(--small-size);
+  color: var(--text-muted);
+  z-index: 2;
+}
+
+/* ===========================================
+   SLIDE NUMBER (bottom-right on content slides)
+   =========================================== */
+.slide-num {
+  position: absolute;
+  bottom: clamp(1rem, 2.5vh, 2rem);
+  right: clamp(1.5rem, 4vw, 3rem);
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: var(--small-size);
+  color: var(--text-muted);
+  z-index: 2;
+}
+</style>
+</head>
+<body>
+
+<!-- ===========================================
+     PROGRESS BAR
+     =========================================== -->
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- ===========================================
+     NAVIGATION DOTS
+     =========================================== -->
+<nav class="nav-dots" id="navDots" aria-label="Slide navigation"></nav>
+
+<!-- ===========================================
+     EDIT MODE UI (invisible until triggered)
+     =========================================== -->
+<div class="edit-hotzone" id="editHotzone" aria-label="Edit mode trigger zone"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">&#9998;</button>
+<div class="edit-banner" id="editBanner">
+  <span>Mode édition · Cliquez un texte pour le modifier · Ctrl+S pour sauvegarder · E ou &#9998; pour quitter</span>
+</div>
+
+<!-- ===========================================
+     SLIDE 1: TITLE
+     =========================================== -->
+<section class="slide title-slide visible" data-slide="0">
+  <div class="orb orb-blue"></div>
+  <div class="orb orb-red"></div>
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal-overline">Assistant IA · Coaching Sportif</p>
+    <h1 class="reveal">Gymshark <em>Sync</em></h1>
+    <p class="subtitle reveal">Assistant intelligent pour coachs sportifs — automatisation, synthèses et planification</p>
+    <p class="tagline reveal">Optimisez. Automatisez. Performez.</p>
+  </div>
+  <span class="author-tag">KrustylaD</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 2: LE PROBLÈME
+     =========================================== -->
+<section class="slide" data-slide="1">
+  <div class="orb orb-blue" style="top:auto;bottom:-10%;right:-8%;width:clamp(150px,30vw,400px);height:clamp(150px,30vw,400px);opacity:0.5"></div>
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Contexte</p>
+    <h2 class="reveal">Le Problème du Coach Sportif</h2>
+    <ul class="bullet-list reveal">
+      <li>Surcharge administrative : planning, suivis, reporting manuel</li>
+      <li>Données dispersées entre WhatsApp, tableurs, emails et notes</li>
+      <li>Manque d'outils IA dédiés au métier du coaching sportif</li>
+      <li>Difficulté à synthétiser les progrès des athlètes en temps réel</li>
+      <li>Perte de temps sur les tâches répétitives au détriment du terrain</li>
+    </ul>
+  </div>
+  <span class="slide-num">02 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 3: NOTRE VISION
+     =========================================== -->
+<section class="slide" data-slide="2">
+  <div class="orb orb-red" style="top:auto;bottom:-12%;left:-6%;opacity:0.6"></div>
+  <div class="accent-bar right"></div>
+  <div class="slide-content" style="max-width: min(80vw, 750px);">
+    <p class="overline reveal">Vision</p>
+    <h2 class="reveal">Un Assistant IA <em>taillé</em> pour le Coaching</h2>
+    <p class="reveal" style="margin-top:clamp(0.5rem,1.5vh,1rem)">
+      Gymshark Sync est un assistant IA interne conçu pour libérer le coach des tâches chronophages. Grâce à un LLM local (Ollama), il dialogue en langage naturel pour organiser les séances, générer des synthèses, planifier les actions et automatiser les workflows.
+    </p>
+    <p class="reveal" style="margin-top:clamp(0.4rem,1vh,0.8rem)">
+      L'objectif : recentrer le coach sur l'essentiel — l'humain et la performance — pendant que l'IA gère la logistique.
+    </p>
+  </div>
+  <span class="slide-num">03 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 4: FONCTIONNALITÉS CLÉS
+     =========================================== -->
+<section class="slide" data-slide="3">
+  <div class="slide-content">
+    <p class="overline reveal">Fonctionnalités</p>
+    <h2 class="reveal">Fonctionnalités Clés</h2>
+    <div class="grid reveal" style="margin-top:clamp(0.5rem,1.5vh,1rem)">
+      <div class="feature-card reveal">
+        <span class="card-icon">&#9997;</span>
+        <h3>Chat Streaming</h3>
+        <p>Réponses du LLM en temps réel via SSE — fluidité et réactivité instantanée</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="card-icon">&#128196;</span>
+        <h3>Historique Intelligent</h3>
+        <p>Conversations persistées, rechargeables, avec contexte conservé (8 derniers tours)</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="card-icon">&#9889;</span>
+        <h3>Prompts Rapides</h3>
+        <p>Suggestions pré-définies pour planifier, synthétiser ou analyser en un clic</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="card-icon">&#128203;</span>
+        <h3>Cartes d'Action</h3>
+        <p>Synthèse, Organisation et Automatisation accessibles depuis l'accueil</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="card-icon">&#128269;</span>
+        <h3>Multi-Vues</h3>
+        <p>Chat, Recherche, Raccourcis, Centre d'aide et Documentation intégrés</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="card-icon">&#127775;</span>
+        <h3>Spotlight & Effets</h3>
+        <p>Curseur spotlight, animations fluides, effets ripple — design premium immersif</p>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">04 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 5: STACK TECHNIQUE
+     =========================================== -->
+<section class="slide" data-slide="4">
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Technologies</p>
+    <h2 class="reveal">Stack Technique</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li><strong>Frontend :</strong> HTML5, CSS3 (variables, grid, flexbox), JavaScript vanilla ES2020+</li>
+      <li><strong>Backend :</strong> Node.js, Express 5.2, architecture ESM (modules ES6)</li>
+      <li><strong>LLM :</strong> Ollama (modèle phi3:mini par défaut) — exécution locale, zero latence cloud</li>
+      <li><strong>Communication :</strong> SSE (Server-Sent Events) pour le streaming temps réel</li>
+      <li><strong>Persistance :</strong> Fichier JSON local pour les conversations</li>
+      <li><strong>API Docs :</strong> Swagger UI + OpenAPI 3 sur <code>/api/docs</code></li>
+    </ul>
+  </div>
+  <span class="slide-num">05 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 6: ARCHITECTURE
+     =========================================== -->
+<section class="slide" data-slide="5">
+  <div class="accent-bar right"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Architecture</p>
+    <h2 class="reveal">Architecture Globale</h2>
+    <div class="arch-diagram reveal" style="margin-top:clamp(0.5rem,2vh,1.5rem)">
+      <div class="arch-block reveal">
+        <span class="arch-label">Frontend SPA</span>
+        <span class="arch-tech">HTML · CSS · JS</span>
+      </div>
+      <span class="arch-arrow reveal">&#8594;</span>
+      <div class="arch-block reveal">
+        <span class="arch-label">Backend API</span>
+        <span class="arch-tech">Express 5.2 · ESM</span>
+      </div>
+      <span class="arch-arrow reveal">&#8596;</span>
+      <div class="arch-block reveal">
+        <span class="arch-label">Ollama LLM</span>
+        <span class="arch-tech">phi3:mini · local</span>
+      </div>
+      <span class="arch-arrow reveal">&#8595;</span>
+      <div class="arch-block reveal">
+        <span class="arch-label">Stockage</span>
+        <span class="arch-tech">JSON · Fichier local</span>
+      </div>
+    </div>
+    <p class="reveal" style="margin-top:clamp(0.5rem,1.5vh,1rem);text-align:center;font-size:var(--small-size);color:var(--text-muted)">
+      Le frontend communique avec le backend via API REST + SSE. Le backend relaie les requêtes au LLM local (Ollama) et streame la réponse. Les conversations sont persistées en JSON.
+    </p>
+  </div>
+  <span class="slide-num">06 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 7: LE FRONTEND
+     =========================================== -->
+<section class="slide" data-slide="6">
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Frontend</p>
+    <h2 class="reveal">Interface Utilisateur</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li>SPA vanilla JavaScript — zéro framework, zéro dépendance externe</li>
+      <li>Design <strong>Dark / Glassmorphism</strong> — immersion visuelle premium</li>
+      <li>Sidebar de navigation avec historique des conversations</li>
+      <li>Effet spotlight suivant le curseur + animations ripple sur les actions</li>
+      <li>Responsive design — adapté desktop et mobile</li>
+    </ul>
+  </div>
+  <span class="slide-num">07 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 8: LE BACKEND
+     =========================================== -->
+<section class="slide" data-slide="7">
+  <div class="accent-bar right"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Backend</p>
+    <h2 class="reveal">Serveur Express & API</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li>Node.js + Express 5.2 en modules ESM (<code>"type": "module"</code>)</li>
+      <li>Routes REST : <code>/api/chat</code>, <code>/api/conversations</code>, <code>/api/llm/health</code></li>
+      <li>Streaming SSE : réponses du LLM en temps réel vers le frontend</li>
+      <li>Swagger UI + spécification OpenAPI 3 pour la documentation interactive</li>
+      <li>Support multi-provider LLM : Ollama (local) ou OpenCode (cloud)</li>
+    </ul>
+  </div>
+  <span class="slide-num">08 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 9: COMMUNICATION SSE (Code)
+     =========================================== -->
+<section class="slide" data-slide="8">
+  <div class="slide-content">
+    <p class="overline reveal">Technique</p>
+    <h2 class="reveal">Streaming SSE en Temps Réel</h2>
+    <div class="code-block reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <code><span class="comment">// POST /api/chat — Le backend streame la réponse du LLM</span>
+<span class="keyword">POST</span> /api/chat
+<span class="string">Content-Type: application/json</span>
+
+<span class="comment">// Requête</span>
+{ <span class="string">"message"</span>: <span class="string">"Planifie ma semaine d'entraînement"</span> }
+
+<span class="comment">// Réponse SSE (text/event-stream)</span>
+<span class="keyword">data:</span> { <span class="string">"type"</span>: <span class="string">"meta"</span>, <span class="string">"conversationId"</span>: <span class="string">"conv_123"</span> }
+<span class="keyword">data:</span> { <span class="string">"type"</span>: <span class="string">"chunk"</span>, <span class="string">"content"</span>: <span class="string">"Voici"</span> }
+<span class="keyword">data:</span> { <span class="string">"type"</span>: <span class="string">"chunk"</span>, <span class="string">"content"</span>: <span class="string">" votre"</span> }
+<span class="keyword">data:</span> [DONE]</code>
+    </div>
+    <p class="reveal" style="margin-top:clamp(0.3rem,0.8vh,0.6rem);font-size:var(--small-size);color:var(--text-muted)">
+      Chaque token est transmis instantanément au frontend via SSE — l'utilisateur voit la réponse se construire en direct.
+    </p>
+  </div>
+  <span class="slide-num">09 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 10: SYSTÈME DE PROMPTS
+     =========================================== -->
+<section class="slide" data-slide="9">
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Intelligence</p>
+    <h2 class="reveal">Système de Prompts</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li><strong>System Prompt</strong> dédié au coaching sportif — contexte métier permanent</li>
+      <li>Chargé depuis un fichier texte, rechargé automatiquement si modifié (cache mtime)</li>
+      <li>Historique de conversation conservé sur les 8 derniers tours (MAX_HISTORY_TURNS)</li>
+      <li>Édition de messages : possibilité de modifier une question et régénérer la réponse</li>
+    </ul>
+  </div>
+  <span class="slide-num">10 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 11: PERSISTANCE
+     =========================================== -->
+<section class="slide" data-slide="10">
+  <div class="accent-bar right"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Données</p>
+    <h2 class="reveal">Persistance & Stockage</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li>Stockage fichier JSON (<code>data/conversations.json</code>) — simple, fiable, portable</li>
+      <li>Chaque conversation possède un ID unique, horodatée et rechargeable</li>
+      <li>CRUD complet : liste, lecture, suppression des conversations via l'API REST</li>
+      <li>Fichier auto-généré au premier lancement — zéro configuration</li>
+    </ul>
+  </div>
+  <span class="slide-num">11 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 12: BÉNÉFICES
+     =========================================== -->
+<section class="slide" data-slide="11">
+  <div class="slide-content">
+    <p class="overline reveal">Impact</p>
+    <h2 class="reveal">Bénéfices pour le Coach</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li><strong>Productivité ×2 :</strong> automatisation des synthèses et plannings</li>
+      <li><strong>Décisions éclairées :</strong> analyse contextuelle par l'IA en langage naturel</li>
+      <li><strong>Centralisation :</strong> toutes les données coach dans une seule interface</li>
+      <li><strong>Zéro latence :</strong> LLM local via Ollama — pas de dépendance cloud, pas de coût API</li>
+    </ul>
+  </div>
+  <span class="slide-num">12 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 13: ROADMAP
+     =========================================== -->
+<section class="slide" data-slide="12">
+  <div class="accent-bar left"></div>
+  <div class="slide-content">
+    <p class="overline reveal">Futur</p>
+    <h2 class="reveal">Roadmap & Prochaines Étapes</h2>
+    <ul class="bullet-list reveal" style="margin-top:clamp(0.4rem,1.2vh,0.8rem)">
+      <li>Support mobile natif (PWA ou React Native)</li>
+      <li>Intégration calendrier (Google Calendar / Outlook) pour la planification</li>
+      <li>Module analytics : tableaux de bord et suivi de progression des athlètes</li>
+      <li>Support de modèles LLM additionnels (Llama 3, Mistral, GPT)</li>
+      <li>Mode collaboratif multi-coach avec partage de conversations</li>
+    </ul>
+  </div>
+  <span class="slide-num">13 / 14</span>
+</section>
+
+<!-- ===========================================
+     SLIDE 14: CLOSING
+     =========================================== -->
+<section class="slide closing-slide" data-slide="13">
+  <div class="orb orb-blue"></div>
+  <div class="orb orb-red"></div>
+  <div class="accent-bar left"></div>
+  <div class="accent-bar right"></div>
+  <div class="slide-content">
+    <p class="overline reveal-overline">Merci</p>
+    <h1 class="reveal">Gymshark <em>Sync</em></h1>
+    <p class="subtitle reveal" style="max-width:min(70vw,500px)">Assistant IA pour coachs sportifs</p>
+    <a class="github-link reveal" href="https://github.com/KrustylaD/Projet-Gymshark---Sync" target="_blank" rel="noopener">
+      github.com/KrustylaD/Projet-Gymshark---Sync
+    </a>
+  </div>
+  <span class="author-tag">KrustylaD</span>
+</section>
+
+<!-- ===========================================
+     JAVASCRIPT: SLIDE PRESENTATION CONTROLLER
+     =========================================== -->
+<script>
+class SlidePresentation {
+  constructor() {
+    this.slides = document.querySelectorAll('.slide');
+    this.currentSlide = 0;
+    this.totalSlides = this.slides.length;
+    this.isTransitioning = false;
+    this.transitionTimeout = null;
+
+    this.progressBar = document.getElementById('progressBar');
+    this.navDotsContainer = document.getElementById('navDots');
+
+    this.setupIntersectionObserver();
+    this.setupKeyboardNav();
+    this.setupWheelNav();
+    this.setupTouchNav();
+    this.setupNavDots();
+    this.setupProgressBar();
+
+    /* Mark first slide visible immediately */
+    this.slides[0].classList.add('visible');
+    this.updateProgress();
+    this.updateActiveDot();
+  }
+
+  /* === Intersection Observer: triggers .visible for animations === */
+  setupIntersectionObserver() {
+    const options = { root: null, threshold: 0.3 };
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          const idx = parseInt(entry.target.dataset.slide);
+          if (!isNaN(idx)) {
+            this.currentSlide = idx;
+            this.updateProgress();
+            this.updateActiveDot();
+          }
+        }
+      });
+    }, options);
+    this.slides.forEach(slide => this.observer.observe(slide));
+  }
+
+  /* === Keyboard navigation === */
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      /* Skip if editing text */
+      if (e.target.getAttribute('contenteditable') === 'true') return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+        case 'ArrowRight':
+        case ' ':
+          e.preventDefault();
+          this.next();
+          break;
+        case 'ArrowUp':
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.prev();
+          break;
+        case 'PageDown':
+          e.preventDefault();
+          this.next();
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          this.prev();
+          break;
+        case 'Home':
+          e.preventDefault();
+          this.goTo(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          this.goTo(this.totalSlides - 1);
+          break;
+      }
+    });
+  }
+
+  /* === Mouse wheel navigation (debounced) === */
+  setupWheelNav() {
+    let wheelTimeout;
+    document.addEventListener('wheel', (e) => {
+      if (this.isTransitioning) return;
+      if (e.target.closest('[contenteditable]')) return;
+
+      e.preventDefault();
+      if (wheelTimeout) return;
+      wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 800);
+
+      if (e.deltaY > 30) this.next();
+      else if (e.deltaY < -30) this.prev();
+    }, { passive: false });
+  }
+
+  /* === Touch/swipe navigation === */
+  setupTouchNav() {
+    let touchStartY = 0;
+    document.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      if (this.isTransitioning) return;
+      const deltaY = touchStartY - e.changedTouches[0].clientY;
+      if (Math.abs(deltaY) > 50) {
+        if (deltaY > 0) this.next();
+        else this.prev();
+      }
+    });
+  }
+
+  /* === Navigation dots === */
+  setupNavDots() {
+    /* Clear any existing dots (prevents duplication on re-open) */
+    this.navDotsContainer.innerHTML = '';
+    for (let i = 0; i < this.totalSlides; i++) {
+      const dot = document.createElement('button');
+      dot.className = 'nav-dot';
+      dot.setAttribute('aria-label', `Slide ${i + 1}`);
+      dot.addEventListener('click', () => this.goTo(i));
+      this.navDotsContainer.appendChild(dot);
+    }
+    this.navDots = this.navDotsContainer.querySelectorAll('.nav-dot');
+  }
+
+  /* === Progress bar === */
+  setupProgressBar() {
+    this.updateProgress();
+  }
+
+  updateProgress() {
+    const pct = (this.currentSlide / (this.totalSlides - 1)) * 100;
+    if (this.progressBar) this.progressBar.style.width = `${pct}%`;
+  }
+
+  updateActiveDot() {
+    this.navDots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === this.currentSlide);
+    });
+  }
+
+  /* === Navigation methods === */
+  next() {
+    if (this.currentSlide < this.totalSlides - 1) {
+      this.goTo(this.currentSlide + 1);
+    }
+  }
+
+  prev() {
+    if (this.currentSlide > 0) {
+      this.goTo(this.currentSlide - 1);
+    }
+  }
+
+  goTo(index) {
+    if (index < 0 || index >= this.totalSlides) return;
+    if (this.isTransitioning) return;
+
+    this.isTransitioning = true;
+    this.slides[index].scrollIntoView({ behavior: 'smooth' });
+    this.currentSlide = index;
+    this.updateProgress();
+    this.updateActiveDot();
+
+    clearTimeout(this.transitionTimeout);
+    this.transitionTimeout = setTimeout(() => {
+      this.isTransitioning = false;
+    }, 600);
+  }
+}
+
+/* ===========================================
+   INLINE EDITING
+   =========================================== */
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.editableElements = [];
+    this.storageKey = 'gymshark-sync-slides';
+
+    this.editToggle = document.getElementById('editToggle');
+    this.editBanner = document.getElementById('editBanner');
+    this.hotzone = document.getElementById('editHotzone');
+
+    /* Identify all editable text elements */
+    const selectors = 'h1, h2, h3, p:not(.overline):not(.subtitle):not(.tagline), li, .arch-label, .arch-tech, .code-block code, .github-link, .overline';
+    this.editableElements = Array.from(document.querySelectorAll(selectors));
+
+    this.setupEditToggle();
+    this.setupKeyboardShortcut();
+    this.loadFromStorage();
+
+    /* Attach edit listeners to all editable elements */
+    this.editableElements.forEach(el => {
+      el.addEventListener('input', () => this.saveToStorage());
+    });
+  }
+
+  setupEditToggle() {
+    let hideTimeout = null;
+
+    /* Hotzone hover with 400ms grace period */
+    this.hotzone.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimeout);
+      this.editToggle.classList.add('show');
+    });
+    this.hotzone.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.editToggle.classList.remove('show');
+      }, 400);
+    });
+
+    this.editToggle.addEventListener('mouseenter', () => clearTimeout(hideTimeout));
+    this.editToggle.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.editToggle.classList.remove('show');
+      }, 400);
+    });
+
+    /* Direct click on hotzone */
+    this.hotzone.addEventListener('click', () => this.toggleEditMode());
+
+    /* Click on toggle button */
+    this.editToggle.addEventListener('click', () => this.toggleEditMode());
+  }
+
+  setupKeyboardShortcut() {
+    document.addEventListener('keydown', (e) => {
+      /* Skip if already editing text */
+      if (e.target.getAttribute('contenteditable') === 'true') return;
+
+      if (e.key === 'e' || e.key === 'E') {
+        /* Don't trigger if user is typing in a form field */
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        this.toggleEditMode();
+      }
+
+      /* Ctrl+S / Cmd+S to save/export */
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        this.exportFile();
+      }
+    });
+  }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+
+    if (this.isActive) {
+      document.body.classList.add('edit-active');
+      this.editToggle.classList.add('active');
+      this.editBanner.classList.add('active');
+      this.editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
+    } else {
+      document.body.classList.remove('edit-active');
+      this.editToggle.classList.remove('active');
+      this.editBanner.classList.remove('active');
+      this.editableElements.forEach(el => el.removeAttribute('contenteditable'));
+      this.saveToStorage();
+    }
+  }
+
+  saveToStorage() {
+    if (!this.isActive) return;
+    const data = this.editableElements.map((el, i) => ({
+      index: i,
+      text: el.textContent.trim()
+    }));
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(data));
+    } catch (e) {
+      /* localStorage might be full or unavailable */
+    }
+  }
+
+  loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      data.forEach(item => {
+        if (this.editableElements[item.index]) {
+          this.editableElements[item.index].textContent = item.text;
+        }
+      });
+    } catch (e) {
+      /* Ignore parse errors */
+    }
+  }
+
+  exportFile() {
+    /* Temporarily strip edit state so saved file opens clean */
+    const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
+    editableEls.forEach(el => el.removeAttribute('contenteditable'));
+    document.body.classList.remove('edit-active');
+    this.editToggle.classList.remove('active', 'show');
+    this.editBanner.classList.remove('active');
+
+    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+    /* Restore edit state immediately */
+    if (this.isActive) {
+      document.body.classList.add('edit-active');
+      editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
+      this.editToggle.classList.add('active');
+      this.editBanner.classList.add('active');
+    }
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'gymshark-sync-presentation.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
+/* === Initialize === */
+const presentation = new SlidePresentation();
+const editor = new InlineEditor();
+</script>
+
+</body>
+</html>
