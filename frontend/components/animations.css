@@ -1,0 +1,291 @@
+/* ============================================================
+   ANIMATIONS (@keyframes)
+   ============================================================ */
+
+@keyframes progression-loader {
+    from { width: 0; }
+    to   { width: 100%; }
+}
+
+@keyframes entree-loader {
+    from {
+        opacity: 0;
+        transform: translateY(36px) scale(0.97) rotateX(8deg);
+        filter: blur(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotateX(0deg);
+        filter: blur(0);
+    }
+}
+
+@keyframes camera-loader {
+    0% {
+        transform: scale(1.1) translateY(-8px);
+        filter: blur(0);
+    }
+    100% {
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes aura-loader {
+    0% {
+        opacity: 0;
+        transform: scale(0.82);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes rideau-gauche {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-101%);
+    }
+}
+
+@keyframes rideau-droit {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(101%);
+    }
+}
+
+@keyframes entree-logo-loader {
+    0% {
+        opacity: 0;
+        transform: translateY(24px) scale(0.82) rotate(-6deg);
+        filter: blur(12px);
+    }
+    65% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0deg);
+        filter: blur(0);
+    }
+}
+
+@keyframes logo-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.05); }
+}
+
+@keyframes balayage-loader {
+    0% {
+        opacity: 0;
+        transform: translateX(-45%) rotate(8deg);
+    }
+    28% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(42%) rotate(8deg);
+    }
+}
+
+@keyframes apparition-vue {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bascule-vue-premium {
+    0% {
+        opacity: 0;
+        transform: translateY(22px) scale(0.988);
+        filter: blur(12px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes revele-lettre {
+    0% {
+        opacity: 0;
+        transform: translateY(24px);
+        filter: blur(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes revele-texte-loader {
+    0% {
+        opacity: 0;
+        transform: translateY(24px);
+        filter: blur(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes revele-barre-loader {
+    0% {
+        opacity: 0;
+        transform: translateY(18px) scaleX(0.88);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scaleX(1);
+    }
+}
+
+@keyframes apparition-message {
+    from { opacity: 0; transform: translateY(10px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes apparition-panneau-gauche {
+    0% {
+        opacity: 0;
+        transform: translateX(-28px) scale(0.985);
+        filter: blur(16px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes apparition-panneau-principal {
+    0% {
+        opacity: 0;
+        transform: translateY(28px) scale(0.99);
+        filter: blur(18px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes halo-flotte {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(0, -12px, 0) scale(1.05); }
+}
+
+@keyframes voile-page {
+    0% {
+        opacity: 0;
+    }
+    25% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes lueur-page {
+    0% {
+        opacity: 0;
+        transform: translateX(-48%) rotate(7deg);
+    }
+    18% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(36%) rotate(7deg);
+    }
+}
+
+@keyframes ripple-expand {
+    from { opacity: 0.6; transform: translate(-50%, -50%) scale(0); }
+    to   { opacity: 0;   transform: translate(-50%, -50%) scale(12); }
+}
+
+@keyframes pulse-micro {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow:
+            0 0 0 1px rgba(255, 97, 97, 0.24),
+            0 0 0 0 rgba(255, 97, 97, 0.12);
+    }
+    50% {
+        transform: scale(1.04);
+        box-shadow:
+            0 0 0 1px rgba(255, 97, 97, 0.36),
+            0 0 0 10px rgba(255, 97, 97, 0.04);
+    }
+}
+
+@keyframes pulse-sortie {
+    0% { opacity: 0.35; }
+    100% { opacity: 1; }
+}
+
+/* Typing indicator animation */
+@keyframes typing-dots {
+    0%, 60%, 100% { 
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    30% { 
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}
+
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.typing-indicator span {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: currentColor;
+    animation: typing-dots 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.reasoning-indicator {
+    display: inline-block;
+    color: var(--text-muted, #888);
+    font-style: italic;
+    font-size: 0.9em;
+    animation: reasoning-pulse 2s ease-in-out infinite;
+}
+
+@keyframes reasoning-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+

@@ -9,16 +9,17 @@ import logger from '../logger.js';
 
 // URL de base Ollama, configurable via variable d'environnement.
 let ollamaBaseUrl = process.env.OLLAMA_URL;
-if (ollamaBaseUrl === undefined || ollamaBaseUrl === null || ollamaBaseUrl === '') {
+if (ollamaBaseUrl == null || ollamaBaseUrl === '') {
     ollamaBaseUrl = 'http://localhost:11434';
 }
 ollamaBaseUrl = ollamaBaseUrl.replace(/\/$/, '');
 
 const API_URL = ollamaBaseUrl + '/api/generate';
+const HEALTH_TIMEOUT_MS = 5000;
 
 // Modele LLM a utiliser, configurable via variable d'environnement.
 let MODEL = process.env.OLLAMA_MODEL;
-if (MODEL === undefined || MODEL === null || MODEL === '') {
+if (MODEL == null || MODEL === '') {
     MODEL = 'phi3:mini';
 }
 
@@ -34,8 +35,9 @@ async function ensureFetch() {
             fetchFn = nodeFetch.default;
             return fetchFn;
         }
-    } catch {
-        // Ignore dynamic import errors.
+    } catch (_err) {
+        // Dynamic import fallback — node-fetch may not be installed.
+        logger.warn('node-fetch dynamic import failed, falling back to native fetch', 'services/ollama.js');
     }
 
     return null;
@@ -46,7 +48,7 @@ async function ensureFetch() {
  * Gere les formats SSE, JSON Ollama /api/generate, /api/chat, et texte brut.
  */
 function extractTextPiece(line) {
-    let value = String(line === undefined || line === null ? '' : line);
+    let value = String(line ?? '');
     if (value === '') return '';
 
     // Supprimer le prefixe SSE "data:" si present.
@@ -63,7 +65,7 @@ function extractTextPiece(line) {
         if (typeof parsed.response === 'string') return parsed.response;
 
         // Format /api/chat : { message: { content: '...' } }
-        if (parsed.message !== undefined && parsed.message !== null && typeof parsed.message.content === 'string') {
+        if (parsed.message != null && typeof parsed.message.content === 'string') {
             return parsed.message.content;
         }
 
@@ -97,14 +99,14 @@ function createAbortTimeout(timeoutMs) {
     let timeoutId;
 
     const clear = () => {
-        if (timeoutId !== undefined) {
+        if (timeoutId != null) {
             clearTimeout(timeoutId);
             timeoutId = undefined;
         }
     };
 
     const arm = () => {
-        if (hasTimeout === false) return;
+        if (!hasTimeout) return;
         clear();
         timeoutId = setTimeout(() => controller.abort(), parsedTimeout);
     };
@@ -260,8 +262,8 @@ async function readNodeStream(body, decoder, timeout, signal, onLine) {
  */
 async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     const resolvedFetch = await ensureFetch();
-    if (resolvedFetch === undefined || resolvedFetch === null) {
-        throw new Error('No fetch implementation available. Install node-fetch or run on Node 18+');
+    if (resolvedFetch == null) {
+        throw new Error('No fetch implementation available');
     }
 
     const timeout = createAbortTimeout(timeoutMs);
@@ -277,7 +279,7 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
         signal: timeout.signal,
     });
 
-    if (res.ok === false) {
+    if (!res.ok) {
         timeout.clear();
         const txt = await res.text().catch(() => '');
         const err = new Error(`Ollama HTTP error: ${res.status} ${res.statusText} - ${txt}`);
@@ -292,20 +294,20 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
     // Appele pour chaque ligne du flux : extrait le texte, l'accumule et appelle le callback.
     const onLine = (line) => {
         const textPiece = extractTextPiece(line);
-        if (textPiece === undefined || textPiece === null || textPiece === '') return;
+        if (textPiece == null || textPiece === '') return;
         result += textPiece;
         timeout.arm();
         if (typeof onChunk === 'function') {
             try {
                 onChunk(textPiece);
             } catch (e) {
-                // Ignorer les erreurs du callback pour ne pas interrompre le flux.
+                logger.warn(`Erreur callback onChunk: ${e.message}`, 'services/ollama.js');
             }
         }
     };
 
     try {
-        const bodyExists = res.body !== undefined && res.body !== null;
+        const bodyExists = res.body != null;
 
         if (bodyExists && typeof res.body.getReader === 'function') {
             // Branche Web Streams : fetch natif Node 18+.
@@ -343,9 +345,9 @@ async function generateOllamaResponse(prompt, { onChunk, timeoutMs } = {}) {
  * Verifie la disponibilite du serveur Ollama en interrogeant /api/tags.
  * Retourne un objet { ok, url, model, ... } decrivant l'etat du serveur.
  */
-async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
+async function getOllamaHealth({ timeoutMs = HEALTH_TIMEOUT_MS } = {}) {
     const resolvedFetch = await ensureFetch();
-    if (resolvedFetch === undefined || resolvedFetch === null) {
+    if (resolvedFetch == null) {
         return {
             ok: false,
             url: ollamaBaseUrl,
@@ -364,7 +366,7 @@ async function getOllamaHealth({ timeoutMs = 5000 } = {}) {
             signal: timeout.signal,
         });
 
-        if (res.ok === false) {
+        if (!res.ok) {
             const txt = await res.text().catch(() => '');
             return {
                 ok: false,

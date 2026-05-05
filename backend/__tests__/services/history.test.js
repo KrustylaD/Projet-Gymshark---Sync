@@ -1,10 +1,13 @@
 import { jest } from '@jest/globals';
 
+const fsPromisesMock = {
+    readFile: jest.fn(),
+    writeFile: jest.fn(),
+};
+
 const fsMock = {
     existsSync: jest.fn(),
     mkdirSync: jest.fn(),
-    readFileSync: jest.fn(),
-    writeFileSync: jest.fn(),
 };
 
 const loggerMock = {
@@ -13,9 +16,11 @@ const loggerMock = {
     dbConnection: jest.fn(),
 };
 
-jest.unstable_mockModule('fs', () => ({
-    default: fsMock,
+jest.unstable_mockModule('fs/promises', () => ({
+    default: fsPromisesMock,
 }));
+
+jest.unstable_mockModule('fs', () => fsMock);
 
 jest.unstable_mockModule('../../logger.js', () => ({
     default: loggerMock,
@@ -33,18 +38,18 @@ async function freshImport() {
 // Simule un fichier conversations.json avec le contenu fourni.
 function mockFileWith(data) {
     fsMock.existsSync.mockReturnValue(true);
-    fsMock.readFileSync.mockReturnValue(JSON.stringify(data));
+    fsPromisesMock.readFile.mockResolvedValue(JSON.stringify(data));
 }
 
 // Simule un fichier conversations.json vide (aucune conversation).
 function mockEmptyFile() {
     fsMock.existsSync.mockReturnValue(true);
-    fsMock.readFileSync.mockReturnValue(JSON.stringify({}));
+    fsPromisesMock.readFile.mockResolvedValue(JSON.stringify({}));
 }
 
-// Recupere l'objet JSON ecrit lors du dernier appel a writeFileSync.
+// Recupere l'objet JSON ecrit lors du dernier appel a writeFile.
 function getWrittenData() {
-    const lastCall = fsMock.writeFileSync.mock.calls[0];
+    const lastCall = fsPromisesMock.writeFile.mock.calls[0];
     return JSON.parse(lastCall[1]);
 }
 
@@ -60,11 +65,10 @@ beforeEach(() => {
 describe('getConversation', () => {
 
     test('doit retourner null si la conversation n\'existe pas', async () => {
-        // Le fichier existe mais ne contient pas l'id demande.
         mockFileWith({ conv_autre: { id: 'conv_autre', messages: [] } });
         const { getConversation } = await freshImport();
 
-        const result = getConversation('conv_inexistante');
+        const result = await getConversation('conv_inexistante');
 
         expect(result).toBeNull();
     });
@@ -80,7 +84,7 @@ describe('getConversation', () => {
         mockFileWith({ conv_1: conversation });
         const { getConversation } = await freshImport();
 
-        const result = getConversation('conv_1');
+        const result = await getConversation('conv_1');
 
         expect(result).toEqual(conversation);
     });
@@ -101,7 +105,7 @@ describe('saveConversation', () => {
             { role: 'user', content: 'Comment aller mieux ?' },
             { role: 'assistant', content: 'Voici mes conseils.' },
         ];
-        saveConversation('conv_1', messages);
+        await saveConversation('conv_1', messages);
 
         const written = getWrittenData();
         expect(written['conv_1'].title).toBe('Comment aller mieux ?');
@@ -113,12 +117,11 @@ describe('saveConversation', () => {
 
         const messageLong = 'A'.repeat(80);
         const messages = [{ role: 'user', content: messageLong }];
-        saveConversation('conv_1', messages);
+        await saveConversation('conv_1', messages);
 
         const written = getWrittenData();
         const titre = written['conv_1'].title;
 
-        // Le titre doit faire exactement 60 caracteres et se terminer par "..."
         expect(titre.length).toBe(60);
         expect(titre.endsWith('...')).toBe(true);
     });
@@ -128,7 +131,7 @@ describe('saveConversation', () => {
         const { saveConversation } = await freshImport();
 
         const messages = [{ role: 'assistant', content: 'Je suis pret.' }];
-        saveConversation('conv_1', messages);
+        await saveConversation('conv_1', messages);
 
         const written = getWrittenData();
         expect(written['conv_1'].title).toBe('Nouvelle conversation');
@@ -147,10 +150,9 @@ describe('saveConversation', () => {
         const { saveConversation } = await freshImport();
 
         const nouveauxMessages = [{ role: 'user', content: 'Nouveau message' }];
-        saveConversation('conv_1', nouveauxMessages);
+        await saveConversation('conv_1', nouveauxMessages);
 
         const written = getWrittenData();
-        // createdAt doit etre la date d'origine, pas la date de mise a jour.
         expect(written['conv_1'].createdAt).toBe(dateCreation);
     });
 
@@ -159,7 +161,7 @@ describe('saveConversation', () => {
         const { saveConversation } = await freshImport();
 
         const messages = [{ role: 'user', content: 'Message ignore pour le titre' }];
-        saveConversation('conv_1', messages, 'Titre personnalise');
+        await saveConversation('conv_1', messages, 'Titre personnalise');
 
         const written = getWrittenData();
         expect(written['conv_1'].title).toBe('Titre personnalise');
@@ -177,7 +179,7 @@ describe('deleteConversation', () => {
         mockFileWith({ conv_autre: { id: 'conv_autre' } });
         const { deleteConversation } = await freshImport();
 
-        const result = deleteConversation('conv_inexistante');
+        const result = await deleteConversation('conv_inexistante');
 
         expect(result).toBe(false);
     });
@@ -188,11 +190,10 @@ describe('deleteConversation', () => {
         });
         const { deleteConversation } = await freshImport();
 
-        const result = deleteConversation('conv_1');
+        const result = await deleteConversation('conv_1');
 
         expect(result).toBe(true);
 
-        // Verifier que la conversation n'est plus dans les donnees ecrites.
         const written = getWrittenData();
         expect(written['conv_1']).toBeUndefined();
     });
@@ -209,7 +210,7 @@ describe('listConversations', () => {
         mockEmptyFile();
         const { listConversations } = await freshImport();
 
-        const result = listConversations();
+        const result = await listConversations();
 
         expect(result).toEqual([]);
     });
@@ -226,7 +227,7 @@ describe('listConversations', () => {
         });
         const { listConversations } = await freshImport();
 
-        const result = listConversations();
+        const result = await listConversations();
 
         expect(result[0].messages).toBeUndefined();
         expect(result[0].id).toBe('conv_1');
@@ -252,9 +253,8 @@ describe('listConversations', () => {
         });
         const { listConversations } = await freshImport();
 
-        const result = listConversations();
+        const result = await listConversations();
 
-        // La conversation la plus recente doit apparaitre en premier.
         expect(result[0].id).toBe('conv_recente');
         expect(result[1].id).toBe('conv_ancienne');
     });

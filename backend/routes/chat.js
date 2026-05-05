@@ -1,12 +1,13 @@
 import express from 'express';
-import { generateOllamaResponse, getOllamaHealth } from '../services/ollama.js';
+import { generateResponse, getHealth } from '../services/llm.js';
 import { getConversation, saveConversation, deleteConversation, listConversations } from '../services/history.js';
 import logger from '../logger.js';
 
 const router = express.Router();
 
-// Nombre maximum de tours (paires user/assistant) conserves dans le prompt.
 const MAX_HISTORY_TURNS = 8;
+const MESSAGE_PREVIEW_MAX_LENGTH = 50;
+const TEST_STREAM_TIMEOUT_MS = 15000;
 
 /* ============================================================
    FONCTIONS UTILITAIRES
@@ -19,7 +20,7 @@ function buildPromptFromHistory(history, userMessage) {
     const lines = [];
 
     for (const entry of history) {
-        if (entry === undefined || entry === null || entry.content === undefined) continue;
+        if (entry == null || entry.content === undefined) continue;
         const speaker = entry.role === 'assistant' ? 'Assistant' : 'Utilisateur';
         lines.push(`${speaker}: ${entry.content}`);
     }
@@ -63,9 +64,9 @@ function resolveConversationId(conversationId) {
  * Charge l'historique complet d'une conversation depuis le fichier.
  * Retourne un tableau vide si la conversation n'existe pas encore.
  */
-function loadConversationHistory(convId) {
-    const saved = getConversation(convId);
-    if (saved === undefined || saved === null) {
+async function loadConversationHistory(convId) {
+    const saved = await getConversation(convId);
+    if (saved == null) {
         return [];
     }
     return saved.messages;
@@ -74,11 +75,11 @@ function loadConversationHistory(convId) {
 /**
  * Ajoute le message utilisateur et la reponse assistant a l'historique, puis sauvegarde.
  */
-function saveUpdatedHistory(convId, history, userMessage, assistantReply) {
+async function saveUpdatedHistory(convId, history, userMessage, assistantReply) {
     const nextHistory = history.slice();
     nextHistory.push({ role: 'user', content: userMessage });
     nextHistory.push({ role: 'assistant', content: assistantReply.trim() });
-    saveConversation(convId, nextHistory);
+    await saveConversation(convId, nextHistory);
 }
 
 /* ============================================================
@@ -94,25 +95,24 @@ router.post('/api/chat', async (req, res) => {
     const body = req.body;
     let message;
     let conversationId;
-    if (body !== undefined && body !== null) {
+    if (body != null) {
         message = body.message;
         conversationId = body.conversationId;
     }
 
     // Construire un apercu du message pour les logs (sans exposer le contenu complet).
     let messagePreview = '';
-    if (message !== undefined && message !== null) {
-        messagePreview = String(message).slice(0, 50);
+    if (message != null) {
+        messagePreview = String(message).slice(0, MESSAGE_PREVIEW_MAX_LENGTH);
     }
     logger.info(`Message recu: ${messagePreview}`);
 
-    // Sans message, impossible de solliciter le modele.
-    if (message === undefined || message === null || message === '') {
+    if (message == null || message === '') {
         return res.status(400).json({ error: 'Missing message' });
     }
 
     const convId = resolveConversationId(conversationId);
-    const history = loadConversationHistory(convId);
+    const history = await loadConversationHistory(convId);
     const trimmedHistory = trimHistory(history);
     const prompt = buildPromptFromHistory(trimmedHistory, message);
 
@@ -127,57 +127,63 @@ router.post('/api/chat', async (req, res) => {
 
     // Envoyer l'identifiant de conversation au client en premier evenement.
     res.write(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`);
-    logger.systemInfo('En attente de reponse Ollama...');
+    logger.systemInfo('En attente de reponse LLM...');
 
-    // `finished` protege contre les doubles terminaisons du flux SSE.
-    let finished = false;
+    // `isFinished` protege contre les doubles terminaisons du flux SSE.
+    let isFinished = false;
     let assistantReply = '';
     let chunkCount = 0;
 
     try {
-        await generateOllamaResponse(prompt, {
+        await generateResponse(prompt, {
             timeoutMs,
             onChunk: (chunk) => {
                 try {
                     chunkCount++;
-                    if (chunk === undefined || chunk === null || chunk === '') return;
+                    if (chunk == null || chunk === '') return;
                     assistantReply += chunk;
-                    // Echapper les retours a la ligne pour garder un evenement SSE valide.
                     const safe = chunk.replace(/\r?\n/g, '\\n');
                     res.write(`data: ${safe}\n\n`);
                 } catch (e) {
                     logger.warn(`Erreur chunk: ${e.message}`, 'routes/chat.js');
                 }
             },
+            onReasoning: () => {
+                try {
+                    res.write(`data: ${JSON.stringify({ type: 'reasoning' })}\n\n`);
+                } catch (e) {
+                    logger.warn(`Erreur onReasoning: ${e.message}`, 'routes/chat.js');
+                }
+            },
         });
 
-        logger.systemInfo(`Reponse Ollama recue, chunks: ${chunkCount}`);
+        logger.systemInfo(`Reponse LLM recue, chunks: ${chunkCount}`);
 
-        if (finished === false) {
+        if (!isFinished) {
             res.write('data: [DONE]\n\n');
-            finished = true;
+            isFinished = true;
         }
 
         // Sauvegarder l'echange complet (user + assistant) dans l'historique.
-        saveUpdatedHistory(convId, history, message, assistantReply);
+        await saveUpdatedHistory(convId, history, message, assistantReply);
         res.end();
 
     } catch (err) {
         logger.fatal(`Error in /api/chat: ${err.message || err}`, 'routes/chat.js');
 
-        if (finished === false) {
+        if (!isFinished) {
             let errorMessage = 'LLM error';
-            if (err !== undefined && err !== null && err.message !== undefined && err.message !== '') {
+            if (err != null && err.message) {
                 errorMessage = err.message;
             }
             res.write(`event: error\ndata: ${JSON.stringify({ message: errorMessage })}\n\n`);
-            finished = true;
+            isFinished = true;
         }
 
         try {
             res.end();
-        } catch (e) {
-            // noop : res.end() peut echouer si la connexion est deja fermee.
+        } catch (_e) {
+            // res.end() peut echouer si la connexion est deja fermee.
         }
     }
 });
@@ -187,17 +193,18 @@ router.post('/api/chat', async (req, res) => {
  * Retourne la liste de toutes les conversations sans leurs messages,
  * triees par date de mise a jour decroissante.
  */
-router.get('/api/conversations', (req, res) => {
-    res.json(listConversations());
+router.get('/api/conversations', async (req, res) => {
+    const conversations = await listConversations();
+    res.json(conversations);
 });
 
 /**
  * GET /api/conversations/:id
  * Retourne une conversation complete (avec messages) par son identifiant.
  */
-router.get('/api/conversations/:id', (req, res) => {
-    const conv = getConversation(req.params.id);
-    if (conv === undefined || conv === null) {
+router.get('/api/conversations/:id', async (req, res) => {
+    const conv = await getConversation(req.params.id);
+    if (conv == null) {
         return res.status(404).json({ error: 'Not found' });
     }
     res.json(conv);
@@ -207,9 +214,9 @@ router.get('/api/conversations/:id', (req, res) => {
  * DELETE /api/conversations/:id
  * Supprime une conversation par son identifiant.
  */
-router.delete('/api/conversations/:id', (req, res) => {
-    const deleted = deleteConversation(req.params.id);
-    if (deleted === false) {
+router.delete('/api/conversations/:id', async (req, res) => {
+    const deleted = await deleteConversation(req.params.id);
+    if (!deleted) {
         return res.status(404).json({ error: 'Not found' });
     }
     res.json({ ok: true });
@@ -217,21 +224,21 @@ router.delete('/api/conversations/:id', (req, res) => {
 
 /**
  * GET /api/llm/health
- * Health check du serveur Ollama. Retourne 200 si OK, 503 sinon.
+ * Health check du serveur LLM. Retourne 200 si OK, 503 sinon.
  */
 router.get('/api/llm/health', async (req, res) => {
-    const health = await getOllamaHealth({ timeoutMs: 5000 });
+    const health = await getHealth({ timeoutMs: 5000 });
 
-    if (health.ok === false) {
+    if (!health.ok) {
         let healthError = 'unknown';
-        if (health.error !== undefined && health.error !== null && health.error !== '') {
+        if (health.error != null && health.error !== '') {
             healthError = health.error;
         }
-        logger.warn(`Ollama health check failed: ${healthError}`, 'routes/chat.js');
+        logger.warn(`LLM health check failed: ${healthError}`, 'routes/chat.js');
         return res.status(503).json(health);
     }
 
-    logger.systemInfo('Ollama health check OK');
+    logger.systemInfo('LLM health check OK');
     return res.status(200).json(health);
 });
 
@@ -248,8 +255,8 @@ router.get('/api/test-stream', async (req, res) => {
     const prompt = "Say hello in 5 words";
 
     try {
-        await generateOllamaResponse(prompt, {
-            timeoutMs: 15000,
+        await generateResponse(prompt, {
+            timeoutMs: TEST_STREAM_TIMEOUT_MS,
             onChunk: (chunk) => {
                 chunkCount++;
                 res.write(`data: ${chunk}\n\n`);

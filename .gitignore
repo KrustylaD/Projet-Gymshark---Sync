@@ -1,4 +1,32 @@
-conversations.json
+# Dependencies
 node_modules/
-*/.env
+
+# Environment files
+*.env
+.env.*
+
+# Logs
 *.log
+npm-debug.log*
+
+# Data / generated
+data/conversations.json
+rapport.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build / dist
+dist/
+build/
+
+# Coverage
+coverage/
+rapport.json

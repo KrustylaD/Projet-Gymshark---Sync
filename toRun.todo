@@ -1,4 +1,0 @@
-☐ Installer Ollama https://oollama run phi3:mini
-llama.com
-☐ Lancer le serveur Ollama : `ollama serve`
-☐ Installer le model `ollama pull phi3:mini`
