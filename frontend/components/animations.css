@@ -233,8 +233,21 @@
 }
 
 @keyframes pulse-sortie {
-    0% { opacity: 0.35; }
-    100% { opacity: 1; }
+    0% {
+        opacity: 0.35;
+        filter: saturate(0.8);
+        transform: scaleX(0.96);
+    }
+    55% {
+        opacity: 1;
+        filter: saturate(1.35);
+        transform: scaleX(1);
+    }
+    100% {
+        opacity: 0.82;
+        filter: saturate(1);
+        transform: scaleX(1);
+    }
 }
 
 /* Typing indicator animation */
